@@ -123,7 +123,6 @@ fn lookup_avalon_info(normalized_name: &str) -> AvalonInfo {
                         .or_else(|| component.get("DisplayName"))
                         .and_then(|v| v.as_str())
                         .unwrap_or("");
-
                     if display_name.eq_ignore_ascii_case("Chest") {
                         let props = component
                             .get("properties")
@@ -140,7 +139,9 @@ fn lookup_avalon_info(normalized_name: &str) -> AvalonInfo {
                         let color = chest_color_from_properties(&prop_values);
                         let size = chest_size_from_properties(&prop_values);
 
-                        *chest_map.entry((color, size)).or_insert(0) += 1;
+                        if color != "unknown" {
+                            *chest_map.entry((color, size)).or_insert(0) += 1;
+                        }
                     }
                     if let Some(tier) = component
                         .get("tier")
@@ -173,6 +174,16 @@ fn lookup_avalon_info(normalized_name: &str) -> AvalonInfo {
                     count,
                 })
                 .collect::<Vec<_>>();
+
+            chests.sort_by_key(|chest| match (chest.color.as_str(), chest.size.as_str()) {
+                ("green", "small") => 0,
+                ("green", "large") => 1,
+                ("blue", "small") => 2,
+                ("blue", "large") => 3,
+                ("gold", "small") => 4,
+                ("gold", "large") => 5,
+                _ => 9,
+            });
 
             chests.sort_by_key(|chest| match chest.color.as_str() {
                 "green" => 0,
@@ -752,27 +763,20 @@ fn send_hotkeys_to_overlay(app: &AppHandle, state: &AppState) -> Result<(), Stri
 }
 
 fn chest_color_from_properties(properties: &[i64]) -> String {
-    if properties.contains(&2) {
-        return "gold".to_string();
+    match properties.get(1).copied() {
+        Some(7) => "green".to_string(),
+        Some(8) => "blue".to_string(),
+        Some(9) => "gold".to_string(),
+        _ => "unknown".to_string(),
     }
-
-    if properties.contains(&1) {
-        return "blue".to_string();
-    }
-
-    if properties.contains(&0) {
-        return "green".to_string();
-    }
-
-    "unknown".to_string()
 }
 
 fn chest_size_from_properties(properties: &[i64]) -> String {
-    if properties.iter().any(|value| matches!(value, 8 | 11 | 13)) {
-        return "large".to_string();
+    match properties.first().copied() {
+        Some(1) => "large".to_string(),
+        Some(0) => "small".to_string(),
+        _ => "unknown".to_string(),
     }
-
-    "small".to_string()
 }
 
 fn initialize_schema(conn: &Connection) -> rusqlite::Result<()> {
@@ -2063,7 +2067,8 @@ fn build_map_overlay_data(state: &AppState) -> Result<MapOverlayData, String> {
 
 fn build_map_overlay_data_from_conn(conn: &Connection) -> Result<MapOverlayData, String> {
     delete_expired_edges(conn)?;
-
+    debug_avalon_raw_components("Xilos-Osayam");
+    debug_avalon_raw_components("Oiritos-Eramtum");
     let locations = load_locations(conn)?;
     let edges = load_edges(conn)?;
     let (bridge_locations, bridge_edges) = build_overlay_shortcuts(conn, &locations)?;
@@ -2351,6 +2356,59 @@ fn shortest_path_bfs_limited(
     }
 
     None
+}
+
+fn debug_avalon_raw_components(name: &str) {
+    let normalized_target = normalize_location_name(name);
+
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("Could not resolve project root")
+        .join("data/albion_navigator_import.json");
+
+    let Ok(text) = fs::read_to_string(&path) else {
+        eprintln!("[avalon-debug] cannot read {}", path.display());
+        return;
+    };
+
+    let Ok(root) = serde_json::from_str::<serde_json::Value>(&text) else {
+        eprintln!("[avalon-debug] invalid json");
+        return;
+    };
+
+    let records = root
+        .get("avalon_locations")
+        .or_else(|| root.get("avalon"))
+        .or_else(|| root.get("avalon_components"))
+        .or_else(|| root.get("avalon_component_records"))
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    for record in records {
+        let name = record.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        let normalized = record
+            .get("normalized_name")
+            .and_then(|v| v.as_str())
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| normalize_location_name(name));
+
+        if normalized != normalized_target {
+            continue;
+        }
+
+        eprintln!("[avalon-debug] LOCATION: {name} / {normalized}");
+
+        if let Some(components) = record.get("components").and_then(|v| v.as_array()) {
+            for component in components {
+                eprintln!("[avalon-debug] component = {}", component);
+            }
+        }
+
+        return;
+    }
+
+    eprintln!("[avalon-debug] not found: {name} / {normalized_target}");
 }
 
 fn overlay_name_for_bridge_id(
