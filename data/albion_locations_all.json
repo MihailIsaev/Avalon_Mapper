@@ -227,7 +227,7 @@
   {
     "name": "Brons Hill",
     "normalized_name": "brons hill",
-    "zone_type": "red"
+    "zone_type": "yellow"
   },
   {
     "name": "Bryn Gorge",
@@ -252,7 +252,7 @@
   {
     "name": "Cairn Cloch",
     "normalized_name": "cairn cloch",
-    "zone_type": "red"
+    "zone_type": "yellow"
   },
   {
     "name": "Cairn Darg",
@@ -3867,7 +3867,7 @@
   {
     "name": "Spindlewood",
     "normalized_name": "spindlewood",
-    "zone_type": "red"
+    "zone_type": "yellow"
   },
   {
     "name": "Springsump Basin",

@@ -100,6 +100,8 @@ struct MapEdge: Codable {
 }
 
 struct MapOverlayData: Codable {
+    let bridge_locations: [RouteOverlayLocation]
+    let bridge_edges: [RouteOverlayEdge]
     let current_location: String?
     let last_portal_destination: String?
     let last_portal_expires_in_seconds: Int?
@@ -405,6 +407,8 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
     private var visible = false
     private var interactive = false
     private var overlayData = MapOverlayData(
+        bridge_locations: [],
+        bridge_edges: [],
         current_location: nil,
         last_portal_destination: nil,
         last_portal_expires_in_seconds: nil,
@@ -423,6 +427,11 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
     init(boundsStatePath: String?) {
         self.boundsStatePath = boundsStatePath
         super.init()
+    }
+
+    func setShortcutDepth(_ value: Int) {
+        print("{\"event\":\"set_shortcut_depth\",\"value\":\(value)}")
+        fflush(stdout)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -506,6 +515,9 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
 
         view.onClearRoute = { [weak self] in
             self?.clearRoute()
+        }
+        view.onShortcutDepthChanged = { [weak self] value in
+            self?.setShortcutDepth(value)
         }
 
         panel.contentView = view
@@ -747,7 +759,11 @@ struct BoundsEvent: Encodable {
 }
 
 final class MapOverlayView: NSView {
+    var onShortcutDepthChanged: ((Int) -> Void)?
+    private var shortcutDepth = 3
     var data: MapOverlayData = MapOverlayData(
+        bridge_locations: [],
+        bridge_edges: [],
         current_location: nil,
 
         last_portal_destination: nil,
@@ -1108,6 +1124,19 @@ private func chestColor(_ color: String) -> NSColor {
         guard interactive else { return }
 
         let point = convert(event.locationInWindow, from: nil)
+        if shortcutMinusRect().contains(point) {
+            shortcutDepth = max(1, shortcutDepth - 1)
+            onShortcutDepthChanged?(shortcutDepth)
+            needsDisplay = true
+            return
+        }
+
+        if shortcutPlusRect().contains(point) {
+            shortcutDepth = min(6, shortcutDepth + 1)
+            onShortcutDepthChanged?(shortcutDepth)
+            needsDisplay = true
+            return
+        }
         if event.type == .rightMouseDown {
             if let hit = lastNodeRects.reversed().first(where: { $0.rect.contains(point) }),
                let location = data.locations.first(where: { $0.id == hit.id }),
@@ -1278,6 +1307,10 @@ private func chestColor(_ color: String) -> NSColor {
                 return loc.name
             }
 
+            if let loc = data.bridge_locations.first(where: { $0.id == selectedId }) {
+                return loc.name
+            }
+
             return nil
         }
 
@@ -1286,9 +1319,11 @@ private func chestColor(_ color: String) -> NSColor {
         clipped(
             name,
             at: NSPoint(x: rect.minX + 14, y: rect.maxY - 34),
-            maxWidth: rect.width - 28,
+            maxWidth: rect.width - 150,
             attrs: valueAttrs
         )
+
+        drawShortcutDepthControl()
     }
 
     private func drawLastPortal(in rect: NSRect) {
@@ -1343,6 +1378,15 @@ private func chestColor(_ color: String) -> NSColor {
                 rawPositions[routeLocation.id] = NSPoint(x: x, y: y + 220)
             }
         }
+        for bridgeLocation in data.bridge_locations {
+            if rawPositions[bridgeLocation.id] != nil {
+                continue
+            }
+
+            if let x = bridgeLocation.x, let y = bridgeLocation.y {
+                rawPositions[bridgeLocation.id] = NSPoint(x: x, y: y)
+            }
+        }
         let xs = rawPositions.values.map(\.x)
         let ys = rawPositions.values.map(\.y)
 
@@ -1395,7 +1439,21 @@ private func chestColor(_ color: String) -> NSColor {
             path.lineWidth = edge.source == "traversed" ? 2.4 : 1.4
             path.stroke()
         }
+        for edge in data.bridge_edges {
+            guard let from = positions[edge.from_location_id],
+                  let to = positions[edge.to_location_id]
+            else {
+                continue
+            }
 
+            let path = NSBezierPath()
+            path.move(to: from)
+            path.line(to: to)
+
+            NSColor.white.withAlphaComponent(0.28).setStroke()
+            path.lineWidth = 1.2
+            path.stroke()
+        }
         for edge in data.route_edges {
             guard let from = positions[edge.from_location_id],
                   let to = positions[edge.to_location_id]
@@ -1443,6 +1501,27 @@ private func chestColor(_ color: String) -> NSColor {
                 tierBorder.lineWidth = 2.1488
                 tierBorder.stroke()
             }
+        }
+        for location in data.bridge_locations {
+            guard let point = positions[location.id] else { continue }
+
+            let radius: CGFloat = 4.5
+            let nodeRect = NSRect(
+                x: point.x - radius,
+                y: point.y - radius,
+                width: radius * 2,
+                height: radius * 2
+            )
+
+            lastNodeRects.append((id: location.id, rect: nodeRect.insetBy(dx: -8, dy: -8)))
+
+            colorForZoneType(location.zone_type, isCurrent: false).withAlphaComponent(0.72).setFill()
+            NSBezierPath(ovalIn: nodeRect).fill()
+
+            NSColor.white.withAlphaComponent(0.42).setStroke()
+            let border = NSBezierPath(ovalIn: nodeRect.insetBy(dx: -1.2, dy: -1.2))
+            border.lineWidth = 1.2
+            border.stroke()
         }
         for location in data.route_locations {
             guard let point = positions[location.id] else { continue }
@@ -1513,6 +1592,45 @@ private func chestColor(_ color: String) -> NSColor {
 
     private func headerRect() -> NSRect {
         NSRect(x: 0, y: bounds.height - 44, width: bounds.width, height: 44)
+    }
+
+    private func shortcutMinusRect() -> NSRect {
+        NSRect(x: bounds.width - 246, y: bounds.height - 36, width: 26, height: 24)
+    }
+
+    private func shortcutValueRect() -> NSRect {
+        NSRect(x: bounds.width - 216, y: bounds.height - 36, width: 34, height: 24)
+    }
+
+    private func shortcutPlusRect() -> NSRect {
+        NSRect(x: bounds.width - 178, y: bounds.height - 36, width: 26, height: 24)
+    }
+
+    private func drawShortcutDepthControl() {
+        NSColor(calibratedWhite: 0.0, alpha: 0.35).setFill()
+        NSBezierPath(roundedRect: shortcutMinusRect(), xRadius: 5, yRadius: 5).fill()
+        NSBezierPath(roundedRect: shortcutValueRect(), xRadius: 5, yRadius: 5).fill()
+        NSBezierPath(roundedRect: shortcutPlusRect(), xRadius: 5, yRadius: 5).fill()
+
+        NSColor.white.withAlphaComponent(0.25).setStroke()
+        NSBezierPath(roundedRect: shortcutMinusRect(), xRadius: 5, yRadius: 5).stroke()
+        NSBezierPath(roundedRect: shortcutValueRect(), xRadius: 5, yRadius: 5).stroke()
+        NSBezierPath(roundedRect: shortcutPlusRect(), xRadius: 5, yRadius: 5).stroke()
+
+        "-".draw(
+            at: NSPoint(x: shortcutMinusRect().minX + 9, y: shortcutMinusRect().minY + 4),
+            withAttributes: smallAttrs
+        )
+
+        "\(shortcutDepth)".draw(
+            at: NSPoint(x: shortcutValueRect().minX + 12, y: shortcutValueRect().minY + 4),
+            withAttributes: smallAttrs
+        )
+
+        "+".draw(
+            at: NSPoint(x: shortcutPlusRect().minX + 8, y: shortcutPlusRect().minY + 4),
+            withAttributes: smallAttrs
+        )
     }
 
     private func undoButtonRect() -> NSRect {

@@ -507,6 +507,8 @@ struct MapOverlayData {
     edges: Vec<Edge>,
     route_locations: Vec<RouteOverlayLocation>,
     route_edges: Vec<RouteOverlayEdge>,
+    bridge_locations: Vec<RouteOverlayLocation>,
+    bridge_edges: Vec<RouteOverlayEdge>,
     last_capture_status: String,
     capture_mode: String,
     ocr_mode: String,
@@ -1895,6 +1897,24 @@ fn spawn_map_overlay_stdout_reader(
             };
             if let Ok(conn) = Connection::open(&db_path) {
                 match event {
+                    "set_shortcut_depth" => {
+                        let value = value
+                            .get("value")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(3)
+                            .clamp(1, 6);
+
+                        let _ = set_setting(&conn, "overlay_shortcut_depth", &value.to_string());
+
+                        let Ok(data) = build_map_overlay_data_from_conn(&conn) else {
+                            continue;
+                        };
+
+                        let _ = send_map_overlay_command_direct(
+                            &overlay,
+                            json!({ "type": "data", "data": data }),
+                        );
+                    }
                     "find_route" => {
                         let from = value
                             .get("from")
@@ -2046,11 +2066,14 @@ fn build_map_overlay_data_from_conn(conn: &Connection) -> Result<MapOverlayData,
 
     let locations = load_locations(conn)?;
     let edges = load_edges(conn)?;
+    let (bridge_locations, bridge_edges) = build_overlay_shortcuts(conn, &locations)?;
     let known_locations_count = locations.len() as i64;
     let known_edges_count = edges.len() as i64;
     Ok(MapOverlayData {
         route_locations: Vec::new(),
         route_edges: Vec::new(),
+        bridge_locations,
+        bridge_edges,
         current_location: get_setting(conn, "current_location_name")?,
         last_portal_expires_in_seconds: get_setting(conn, "last_portal_expires_in_seconds")?
             .and_then(|value| value.parse::<i64>().ok()),
@@ -2111,6 +2134,240 @@ fn sanitize_overlay_bounds(bounds: MapOverlayBounds) -> MapOverlayBounds {
         width: bounds.width.clamp(260, 800),
         height: bounds.height.clamp(220, 700),
     }
+}
+
+fn build_overlay_shortcuts(
+    conn: &Connection,
+    visible_locations: &[Location],
+) -> Result<(Vec<RouteOverlayLocation>, Vec<RouteOverlayEdge>), String> {
+    if visible_locations.len() < 2 {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let max_edges = get_setting(conn, "overlay_shortcut_depth")?
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(3)
+        .clamp(1, 6);
+    let graph = build_route_graph(conn)?;
+
+    let mut visible_by_norm = std::collections::HashMap::<String, &Location>::new();
+
+    for location in visible_locations {
+        visible_by_norm.insert(location.normalized_name.clone(), location);
+    }
+
+    let visible = visible_locations
+        .iter()
+        .filter(|location| {
+            location.zone_type == "avalon"
+                && graph.contains_key(&location.normalized_name)
+        })
+        .collect::<Vec<_>>();
+
+    let mut hidden_id_by_norm = std::collections::HashMap::<String, i64>::new();
+    let mut bridge_locations_by_id = std::collections::HashMap::<i64, RouteOverlayLocation>::new();
+    let mut bridge_edges_by_key = std::collections::HashMap::<(i64, i64), RouteOverlayEdge>::new();
+
+    let mut next_hidden_id = -10_000_i64;
+    let mut next_edge_id = -20_000_i64;
+
+    for i in 0..visible.len() {
+        for j in (i + 1)..visible.len() {
+            let a = visible[i];
+            let b = visible[j];
+
+            let Some(path) = shortest_path_bfs_limited(
+                &graph,
+                &a.normalized_name,
+                &b.normalized_name,
+                max_edges,
+            )else {
+                continue;
+            };
+
+            if path.len() < 3 || path.len() > max_edges + 1 {
+                continue;
+            }
+
+            let ax = a.x.unwrap_or(0.0);
+            let ay = a.y.unwrap_or(0.0);
+            let bx = b.x.unwrap_or(ax + 160.0);
+            let by = b.y.unwrap_or(ay);
+
+            let mut ids = Vec::<i64>::new();
+
+            for (path_index, normalized) in path.iter().enumerate() {
+                if let Some(existing) = visible_by_norm.get(normalized) {
+                    ids.push(existing.id);
+                    continue;
+                }
+
+                let id = if let Some(id) = hidden_id_by_norm.get(normalized) {
+                    *id
+                } else {
+                    let id = next_hidden_id;
+                    next_hidden_id -= 1;
+                    hidden_id_by_norm.insert(normalized.clone(), id);
+
+                    let t = path_index as f64 / (path.len().saturating_sub(1).max(1) as f64);
+                    let x = ax + (bx - ax) * t;
+                    let y = ay + (by - ay) * t;
+
+                    let name = resolve_route_location_name(conn, normalized)
+                        .unwrap_or_else(|_| title_case_location_name(normalized));
+
+                    let zone_type = infer_zone_type_from_name(&name);
+
+                    bridge_locations_by_id.insert(
+                        id,
+                        RouteOverlayLocation {
+                            id,
+                            name,
+                            normalized_name: normalized.clone(),
+                            zone_type,
+                            x: Some(x),
+                            y: Some(y),
+                        },
+                    );
+
+                    id
+                };
+
+                ids.push(id);
+            }
+
+            for k in 0..ids.len().saturating_sub(1) {
+                let from_id = ids[k];
+                let to_id = ids[k + 1];
+
+                let key = if from_id <= to_id {
+                    (from_id, to_id)
+                } else {
+                    (to_id, from_id)
+                };
+
+                if bridge_edges_by_key.contains_key(&key) {
+                    continue;
+                }
+
+                let from_name = overlay_name_for_bridge_id(
+                    conn,
+                    from_id,
+                    &visible_by_norm,
+                    &bridge_locations_by_id,
+                );
+
+                let to_name = overlay_name_for_bridge_id(
+                    conn,
+                    to_id,
+                    &visible_by_norm,
+                    &bridge_locations_by_id,
+                );
+
+                bridge_edges_by_key.insert(
+                    key,
+                    RouteOverlayEdge {
+                        id: next_edge_id,
+                        from_location_id: from_id,
+                        to_location_id: to_id,
+                        from_location_name: from_name,
+                        to_location_name: to_name,
+                        source: "bridge_shortcut".to_string(),
+                    },
+                );
+
+                next_edge_id -= 1;
+            }
+        }
+    }
+
+    let mut bridge_locations = bridge_locations_by_id
+        .into_values()
+        .collect::<Vec<_>>();
+
+    bridge_locations.sort_by(|a, b| a.id.cmp(&b.id));
+
+    let mut bridge_edges = bridge_edges_by_key
+        .into_values()
+        .collect::<Vec<_>>();
+
+    bridge_edges.sort_by(|a, b| a.id.cmp(&b.id));
+
+    Ok((bridge_locations, bridge_edges))
+}
+
+fn shortest_path_bfs_limited(
+    graph: &std::collections::HashMap<String, Vec<String>>,
+    from: &str,
+    to: &str,
+    max_edges: usize,
+) -> Option<Vec<String>> {
+    if from == to {
+        return Some(vec![from.to_string()]);
+    }
+
+    let mut queue = std::collections::VecDeque::<(String, usize)>::new();
+    let mut visited = std::collections::HashSet::<String>::new();
+    let mut parent = std::collections::HashMap::<String, String>::new();
+
+    visited.insert(from.to_string());
+    queue.push_back((from.to_string(), 0));
+
+    while let Some((current, depth)) = queue.pop_front() {
+        if depth >= max_edges {
+            continue;
+        }
+
+        let Some(neighbors) = graph.get(&current) else {
+            continue;
+        };
+
+        for neighbor in neighbors {
+            if visited.contains(neighbor) {
+                continue;
+            }
+
+            visited.insert(neighbor.clone());
+            parent.insert(neighbor.clone(), current.clone());
+
+            if neighbor == to {
+                let mut path = vec![to.to_string()];
+                let mut cursor = to.to_string();
+
+                while let Some(prev) = parent.get(&cursor) {
+                    path.push(prev.clone());
+                    cursor = prev.clone();
+
+                    if cursor == from {
+                        break;
+                    }
+                }
+
+                path.reverse();
+                return Some(path);
+            }
+
+            queue.push_back((neighbor.clone(), depth + 1));
+        }
+    }
+
+    None
+}
+
+fn overlay_name_for_bridge_id(
+    _conn: &Connection,
+    id: i64,
+    visible_by_norm: &std::collections::HashMap<String, &Location>,
+    hidden_by_id: &std::collections::HashMap<i64, RouteOverlayLocation>,
+) -> String {
+    if let Some(hidden) = hidden_by_id.get(&id) {
+        return hidden.name.clone();
+    }
+
+    visible_by_norm
+        .values()
+        .find(|location| location.id == id)
+        .map(|location| location.name.clone())
+        .unwrap_or_else(|| format!("node:{id}"))
 }
 
 fn ensure_macos_overlay_helper(app: &AppHandle) -> Result<PathBuf, String> {
@@ -3642,7 +3899,7 @@ fn title_case_location_name(normalized: &str) -> String {
                 }
                 None => String::new(),
             }
-        })\
+        })
         .collect::<Vec<_>>()
         .join(" ")
 }
