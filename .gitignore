@@ -1,0 +1,12 @@
+node_modules/
+dist/
+target/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.idea/
+src-tauri/target/
+native/ocr/__pycache__/
+tools/data/
+test_crops/

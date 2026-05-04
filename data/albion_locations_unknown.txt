@@ -1,0 +1,153 @@
+ARENA-City
+Arena1
+Bank of Bridgewatch
+Bank of Caerleon
+Bank of Fort Sterling
+Bank of Lymhurst
+Bank of Martlock
+Bank of Thetford
+Brecilien Bank
+Brecilien Copse
+Brecilien Grove
+Brecilien Market
+Brecilien Thicket
+Brecilien Weald
+Bridgewatch Market
+Bridgewatch Portal
+Caerleon Market
+Cathedral of Light
+Chambers of Truth
+Champions' Realm
+Conquerors' Hall Lvl. 1
+Conquerors' Hall Lvl. 2
+Conquerors' Hall Lvl. 3
+Conquerors' Hall Lvl. 4
+Corrupted Lair
+Crystal Realm
+CrystalRealmDebug
+Curious Excavation
+Debug
+Deepwood Enclave
+DNG-UND-01-MAIN-06
+DNG-UND-01-SUB-06
+Eternal Battle
+Exalted Crypt
+Exalted Undercrypt
+Farmland Skirmish
+Fishy Business
+Forest Burrow
+Fort Sterling Market
+Fort Sterling Portal
+Hallowed Crypt
+Hallowed Undercrypt
+Heretic Cellar Network
+HIDEOUT
+HomeTerritory Skirmish
+In the Raven's Claws
+ISLAND-GUILD-0001a_ISL_DL_T1_NON
+ISLAND-GUILD-0001b_ISL_DL_T1_NON
+ISLAND-GUILD-0001c_ISL_DL_T1_NON
+ISLAND-GUILD-0001d_ISL_DL_T1_NON
+ISLAND-GUILD-0001e_ISL_DL_T1_NON
+ISLAND-GUILD-0001f_ISL_DL_T1_NON
+ISLAND-PLAYER-0001a_ISL_DL_T1_NON
+ISLAND-PLAYER-0001b_ISL_DL_T1_NON
+ISLAND-PLAYER-0001c_ISL_DL_T1_NON
+ISLAND-PLAYER-0001d_ISL_DL_T1_NON
+ISLAND-PLAYER-0001e_ISL_DL_T1_NON
+ISLAND-PLAYER-0001f_ISL_DL_T1_NON
+ISLAND-PLAYER-MISTS-0001a
+ISLAND-PLAYER-MISTS-0001b
+ISLAND-PLAYER-MISTS-0001c
+ISLAND-PLAYER-MISTS-0001d
+ISLAND-PLAYER-MISTS-0001e
+ISLAND-PLAYER-MISTS-0001f
+Large Crystal Realm
+LEGACY-KEEPER-01
+LEGACY-KEEPER-SOLO-01
+LEGACY-UNDEAD-01
+LEGACY-UNDEAD-02
+Lumber Lunacy
+Lurking Underneath
+Lymhurst Market
+Lymhurst Portal
+Martlock Market
+Martlock Portal
+Mushroom Cave
+Ore Adit
+Preaching to the Dead
+PSG-0001
+PSG-0002
+PSG-0008
+PSG-0009
+PSG-0010
+PSG-0011
+PSG-0012
+PSG-0013
+PSG-0014
+PSG-0015
+PSG-0016
+PSG-0017
+PSG-0018
+PSG-0019
+PSG-0020
+PSG-0021
+PSG-0022
+PSG-0023
+PSG-0024
+PSG-0025
+PSG-0026
+PSG-0027
+PSG-0028
+PSG-0029
+PSG-0030
+PSG-0031
+PSG-0032
+PSG-0033
+PSG-0034
+PSG-0035
+PSG-0036
+PSG-0037
+PSG-0038
+PSG-0039
+PSG-0040
+PSG-0041
+PSG-0042
+PSG-0043
+PSG-0044
+PSG-0045
+PSG-0046
+PSG-0047
+PSG-0048
+PSG-0049
+PSG-0050
+PSG-0051
+PSG-0052
+PSG-0053
+PSG-0054
+PSG-H-0001
+PSG-H-0002
+Resource Skirmish
+Resource Skirmish 2
+Rock Adit
+Sabertooth Den
+Stone Wars
+Stoneroot Caverns
+Swamp Burrow
+The Arena
+The Boneyard
+The Citadel
+The Courtyard
+The Fortress
+The Four Bridges
+The Hill
+The Pit
+The Plains
+The Traverse
+The Tribunal
+The Underway
+Thetford Market
+Thetford Portal
+Three Sisters
+Trinity Hall
+VegAnimTest

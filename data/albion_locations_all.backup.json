@@ -1,0 +1,4837 @@
+[
+  {
+    "name": "Adrens Hill",
+    "normalized_name": "adrens hill",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Anklesnag Mire",
+    "normalized_name": "anklesnag mire",
+    "zone_type": "red"
+  },
+  {
+    "name": "ARENA-City",
+    "normalized_name": "arena-city",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Arena1",
+    "normalized_name": "arena1",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Arthur's Rest",
+    "normalized_name": "arthur's rest",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Aspenwood",
+    "normalized_name": "aspenwood",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Astolat",
+    "normalized_name": "astolat",
+    "zone_type": "red"
+  },
+  {
+    "name": "Avalanche Incline",
+    "normalized_name": "avalanche incline",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Avalanche Ravine",
+    "normalized_name": "avalanche ravine",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Bank of Bridgewatch",
+    "normalized_name": "bank of bridgewatch",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Bank of Caerleon",
+    "normalized_name": "bank of caerleon",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Bank of Fort Sterling",
+    "normalized_name": "bank of fort sterling",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Bank of Lymhurst",
+    "normalized_name": "bank of lymhurst",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Bank of Martlock",
+    "normalized_name": "bank of martlock",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Bank of Thetford",
+    "normalized_name": "bank of thetford",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Battlebrae Flatland",
+    "normalized_name": "battlebrae flatland",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Battlebrae Grassland",
+    "normalized_name": "battlebrae grassland",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Battlebrae Lake",
+    "normalized_name": "battlebrae lake",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Battlebrae Meadow",
+    "normalized_name": "battlebrae meadow",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Battlebrae Peaks",
+    "normalized_name": "battlebrae peaks",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Battlebrae Plain",
+    "normalized_name": "battlebrae plain",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Bellever Tor",
+    "normalized_name": "bellever tor",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Birchcopse",
+    "normalized_name": "birchcopse",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Birken Fell",
+    "normalized_name": "birken fell",
+    "zone_type": "red"
+  },
+  {
+    "name": "Black Monastery",
+    "normalized_name": "black monastery",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Blackthorn Quarry",
+    "normalized_name": "blackthorn quarry",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Bleachskull Desert",
+    "normalized_name": "bleachskull desert",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Bleachskull Steppe",
+    "normalized_name": "bleachskull steppe",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Bonepool Marsh",
+    "normalized_name": "bonepool marsh",
+    "zone_type": "red"
+  },
+  {
+    "name": "Bowscale Fell",
+    "normalized_name": "bowscale fell",
+    "zone_type": "red"
+  },
+  {
+    "name": "Braemore Lowland",
+    "normalized_name": "braemore lowland",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Braemore Upland",
+    "normalized_name": "braemore upland",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Brambleshore Hinterlands",
+    "normalized_name": "brambleshore hinterlands",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Brecilien",
+    "normalized_name": "brecilien",
+    "zone_type": "city"
+  },
+  {
+    "name": "Brecilien Bank",
+    "normalized_name": "brecilien bank",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Brecilien Copse",
+    "normalized_name": "brecilien copse",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Brecilien Grove",
+    "normalized_name": "brecilien grove",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Brecilien Market",
+    "normalized_name": "brecilien market",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Brecilien Thicket",
+    "normalized_name": "brecilien thicket",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Brecilien Weald",
+    "normalized_name": "brecilien weald",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Brent Knoll",
+    "normalized_name": "brent knoll",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Bridgewatch",
+    "normalized_name": "bridgewatch",
+    "zone_type": "city"
+  },
+  {
+    "name": "Bridgewatch Market",
+    "normalized_name": "bridgewatch market",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Bridgewatch Portal",
+    "normalized_name": "bridgewatch portal",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Broken Fell",
+    "normalized_name": "broken fell",
+    "zone_type": "red"
+  },
+  {
+    "name": "Brons Hill",
+    "normalized_name": "brons hill",
+    "zone_type": "red"
+  },
+  {
+    "name": "Bryn Gorge",
+    "normalized_name": "bryn gorge",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Caerleon",
+    "normalized_name": "caerleon",
+    "zone_type": "city"
+  },
+  {
+    "name": "Caerleon Market",
+    "normalized_name": "caerleon market",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Cairn Camain",
+    "normalized_name": "cairn camain",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Cairn Cloch",
+    "normalized_name": "cairn cloch",
+    "zone_type": "red"
+  },
+  {
+    "name": "Cairn Darg",
+    "normalized_name": "cairn darg",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Cairn Drain",
+    "normalized_name": "cairn drain",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Cairn Fidair",
+    "normalized_name": "cairn fidair",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Cairn Glascore",
+    "normalized_name": "cairn glascore",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Cairn Gorm",
+    "normalized_name": "cairn gorm",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Camlann",
+    "normalized_name": "camlann",
+    "zone_type": "red"
+  },
+  {
+    "name": "Carns Hill",
+    "normalized_name": "carns hill",
+    "zone_type": "red"
+  },
+  {
+    "name": "Cases-Ugumlos",
+    "normalized_name": "cases-ugumlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Casitos-Alieam",
+    "normalized_name": "casitos-alieam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Casitos-Atinaum",
+    "normalized_name": "casitos-atinaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Casitos-Avaelum",
+    "normalized_name": "casitos-avaelum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Casos-Aiagsum",
+    "normalized_name": "casos-aiagsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Casos-Aximam",
+    "normalized_name": "casos-aximam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Casos-Ayosrom",
+    "normalized_name": "casos-ayosrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Casos-Uruxtum",
+    "normalized_name": "casos-uruxtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cathedral of Light",
+    "normalized_name": "cathedral of light",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Caulder Fissure",
+    "normalized_name": "caulder fissure",
+    "zone_type": "red"
+  },
+  {
+    "name": "Cebitos-Aeaylum",
+    "normalized_name": "cebitos-aeaylum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cebos-Avemlum",
+    "normalized_name": "cebos-avemlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cedarcopse",
+    "normalized_name": "cedarcopse",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Ceres-Iooinum",
+    "normalized_name": "ceres-iooinum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Ceritos-Avulsum",
+    "normalized_name": "ceritos-avulsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Ceros-Aeaylum",
+    "normalized_name": "ceros-aeaylum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cetitos-Aiayrom",
+    "normalized_name": "cetitos-aiayrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cetitos-Avixnum",
+    "normalized_name": "cetitos-avixnum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cetitos-Aximam",
+    "normalized_name": "cetitos-aximam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cetos-Obaelos",
+    "normalized_name": "cetos-obaelos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Chambers of Truth",
+    "normalized_name": "chambers of truth",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Champions' Realm",
+    "normalized_name": "champions' realm",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Chillhag",
+    "normalized_name": "chillhag",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Cieites-Ugumlos",
+    "normalized_name": "cieites-ugumlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cieitos-Avioaum",
+    "normalized_name": "cieitos-avioaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cieitos-Ayosrom",
+    "normalized_name": "cieitos-ayosrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cieitos-Obaelos",
+    "normalized_name": "cieitos-obaelos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cieitos-Otatrom",
+    "normalized_name": "cieitos-otatrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cieos-Atatlum",
+    "normalized_name": "cieos-atatlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cilitos-Opodam",
+    "normalized_name": "cilitos-opodam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cilos-Avioaum",
+    "normalized_name": "cilos-avioaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cilos-Ofailos",
+    "normalized_name": "cilos-ofailos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cilos-Otatrom",
+    "normalized_name": "cilos-otatrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Citadel of Ash",
+    "normalized_name": "citadel of ash",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Conitos-Ofailos",
+    "normalized_name": "conitos-ofailos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Conitos-Oxaeaum",
+    "normalized_name": "conitos-oxaeaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Conitos-Uruxtum",
+    "normalized_name": "conitos-uruxtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Conos-Avaelum",
+    "normalized_name": "conos-avaelum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Conquerors' Hall Lvl. 1",
+    "normalized_name": "conquerors' hall lvl. 1",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Conquerors' Hall Lvl. 2",
+    "normalized_name": "conquerors' hall lvl. 2",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Conquerors' Hall Lvl. 3",
+    "normalized_name": "conquerors' hall lvl. 3",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Conquerors' Hall Lvl. 4",
+    "normalized_name": "conquerors' hall lvl. 4",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Coritos-Avemlum",
+    "normalized_name": "coritos-avemlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Coros-Aiayrom",
+    "normalized_name": "coros-aiayrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Coros-Alieam",
+    "normalized_name": "coros-alieam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Coros-Atinaum",
+    "normalized_name": "coros-atinaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Corrupted Lair",
+    "normalized_name": "corrupted lair",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Coues-Exakrom",
+    "normalized_name": "coues-exakrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Couos-Ayayaum",
+    "normalized_name": "couos-ayayaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Couos-Opodam",
+    "normalized_name": "couos-opodam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cracked Earth",
+    "normalized_name": "cracked earth",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Creag Dhor",
+    "normalized_name": "creag dhor",
+    "zone_type": "red"
+  },
+  {
+    "name": "Creag Garr",
+    "normalized_name": "creag garr",
+    "zone_type": "red"
+  },
+  {
+    "name": "Creag Meagir",
+    "normalized_name": "creag meagir",
+    "zone_type": "red"
+  },
+  {
+    "name": "Creag Morr",
+    "normalized_name": "creag morr",
+    "zone_type": "red"
+  },
+  {
+    "name": "Croker Hill",
+    "normalized_name": "croker hill",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Crose Gorge",
+    "normalized_name": "crose gorge",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Crystal Realm",
+    "normalized_name": "crystal realm",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "CrystalRealmDebug",
+    "normalized_name": "crystalrealmdebug",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Curious Excavation",
+    "normalized_name": "curious excavation",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Curites-Exakrom",
+    "normalized_name": "curites-exakrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Curitos-Ayayaum",
+    "normalized_name": "curitos-ayayaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Curlew Fen",
+    "normalized_name": "curlew fen",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Curos-Avulsum",
+    "normalized_name": "curos-avulsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cuyites-Iooinum",
+    "normalized_name": "cuyites-iooinum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cynitos-Aiagsum",
+    "normalized_name": "cynitos-aiagsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cynitos-Atatlum",
+    "normalized_name": "cynitos-atatlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cynos-Avixnum",
+    "normalized_name": "cynos-avixnum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Cynos-Oxaeaum",
+    "normalized_name": "cynos-oxaeaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Daemonium Keep",
+    "normalized_name": "daemonium keep",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Darkbough Snag",
+    "normalized_name": "darkbough snag",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Darkground Swamp",
+    "normalized_name": "darkground swamp",
+    "zone_type": "red"
+  },
+  {
+    "name": "Deadpine Forest",
+    "normalized_name": "deadpine forest",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Deadvein Gully",
+    "normalized_name": "deadvein gully",
+    "zone_type": "red"
+  },
+  {
+    "name": "Deathreach Priory",
+    "normalized_name": "deathreach priory",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Deathwisp Bog",
+    "normalized_name": "deathwisp bog",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Deathwisp Sink",
+    "normalized_name": "deathwisp sink",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Debug",
+    "normalized_name": "debug",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Deeproot Wood",
+    "normalized_name": "deeproot wood",
+    "zone_type": "red"
+  },
+  {
+    "name": "Deepwood Copse",
+    "normalized_name": "deepwood copse",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Deepwood Dell",
+    "normalized_name": "deepwood dell",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Deepwood Enclave",
+    "normalized_name": "deepwood enclave",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Deepwood Gorge",
+    "normalized_name": "deepwood gorge",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Deepwood Pines",
+    "normalized_name": "deepwood pines",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Dewleaf Fen",
+    "normalized_name": "dewleaf fen",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "DNG-UND-01-MAIN-06",
+    "normalized_name": "dng-und-01-main-06",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "DNG-UND-01-SUB-06",
+    "normalized_name": "dng-und-01-sub-06",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Domhain Chasm",
+    "normalized_name": "domhain chasm",
+    "zone_type": "red"
+  },
+  {
+    "name": "Driftwood Glen",
+    "normalized_name": "driftwood glen",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Driftwood Hollow",
+    "normalized_name": "driftwood hollow",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Driftwood Vale",
+    "normalized_name": "driftwood vale",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Drownfield Course",
+    "normalized_name": "drownfield course",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Drownfield Fen",
+    "normalized_name": "drownfield fen",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Drownfield Mire",
+    "normalized_name": "drownfield mire",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Drownfield Quag",
+    "normalized_name": "drownfield quag",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Drownfield Rut",
+    "normalized_name": "drownfield rut",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Drownfield Sink",
+    "normalized_name": "drownfield sink",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Drownfield Slough",
+    "normalized_name": "drownfield slough",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Drownfield Wetland",
+    "normalized_name": "drownfield wetland",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Drownhorse Basin",
+    "normalized_name": "drownhorse basin",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Drybasin Oasis",
+    "normalized_name": "drybasin oasis",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Drybasin Riverbed",
+    "normalized_name": "drybasin riverbed",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Dryfield Meadow",
+    "normalized_name": "dryfield meadow",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Drytop Pillars",
+    "normalized_name": "drytop pillars",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Drytop Riverbed",
+    "normalized_name": "drytop riverbed",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Dryvein Confluence",
+    "normalized_name": "dryvein confluence",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Dryvein Cross",
+    "normalized_name": "dryvein cross",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Dryvein End",
+    "normalized_name": "dryvein end",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Dryvein Oasis",
+    "normalized_name": "dryvein oasis",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Dryvein Plain",
+    "normalized_name": "dryvein plain",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Dryvein Riverbed",
+    "normalized_name": "dryvein riverbed",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Dryvein Steppe",
+    "normalized_name": "dryvein steppe",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Drywater Meadow",
+    "normalized_name": "drywater meadow",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Dusklight Fen",
+    "normalized_name": "dusklight fen",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Dusktree Swamp",
+    "normalized_name": "dusktree swamp",
+    "zone_type": "red"
+  },
+  {
+    "name": "Eldersleep",
+    "normalized_name": "eldersleep",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Eldon Hill",
+    "normalized_name": "eldon hill",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Eternal Battle",
+    "normalized_name": "eternal battle",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Everwinter Crossing",
+    "normalized_name": "everwinter crossing",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Everwinter Expanse",
+    "normalized_name": "everwinter expanse",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Everwinter Gap",
+    "normalized_name": "everwinter gap",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Everwinter Gorge",
+    "normalized_name": "everwinter gorge",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Everwinter Incline",
+    "normalized_name": "everwinter incline",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Everwinter Passage",
+    "normalized_name": "everwinter passage",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Everwinter Peak",
+    "normalized_name": "everwinter peak",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Everwinter Plain",
+    "normalized_name": "everwinter plain",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Everwinter Reach",
+    "normalized_name": "everwinter reach",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Everwinter Shores",
+    "normalized_name": "everwinter shores",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Exalted Crypt",
+    "normalized_name": "exalted crypt",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Exalted Undercrypt",
+    "normalized_name": "exalted undercrypt",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Eye of the Forest",
+    "normalized_name": "eye of the forest",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Falsestep Marsh",
+    "normalized_name": "falsestep marsh",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Farmland Skirmish",
+    "normalized_name": "farmland skirmish",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Farshore Bay",
+    "normalized_name": "farshore bay",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Farshore Cape",
+    "normalized_name": "farshore cape",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Farshore Drylands",
+    "normalized_name": "farshore drylands",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Farshore Esker",
+    "normalized_name": "farshore esker",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Farshore Heath",
+    "normalized_name": "farshore heath",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Farshore Lagoon",
+    "normalized_name": "farshore lagoon",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Fasites-Azazsum",
+    "normalized_name": "fasites-azazsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fasitos-Atezsum",
+    "normalized_name": "fasitos-atezsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fasitos-Oleraum",
+    "normalized_name": "fasitos-oleraum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fasitos-Oyuctum",
+    "normalized_name": "fasitos-oyuctum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fasos-Ayiotum",
+    "normalized_name": "fasos-ayiotum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Febites-Opavun",
+    "normalized_name": "febites-opavun",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Febos-Acalun",
+    "normalized_name": "febos-acalun",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Felniks Hill",
+    "normalized_name": "felniks hill",
+    "zone_type": "red"
+  },
+  {
+    "name": "Ferites-Ohohtum",
+    "normalized_name": "ferites-ohohtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Feritos-Enomaum",
+    "normalized_name": "feritos-enomaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Feritos-Osinsum",
+    "normalized_name": "feritos-osinsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Ferndell",
+    "normalized_name": "ferndell",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Feros-Oyuctum",
+    "normalized_name": "feros-oyuctum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fetos-Aiaylos",
+    "normalized_name": "fetos-aiaylos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fiees-Ohohtum",
+    "normalized_name": "fiees-ohohtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fieites-Unavtum",
+    "normalized_name": "fieites-unavtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fieos-Aiuttum",
+    "normalized_name": "fieos-aiuttum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fieos-Atezsum",
+    "normalized_name": "fieos-atezsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Files-Azazsum",
+    "normalized_name": "files-azazsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Filites-Izohun",
+    "normalized_name": "filites-izohun",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Filitos-Uzazlum",
+    "normalized_name": "filitos-uzazlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Filos-Abalam",
+    "normalized_name": "filos-abalam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Firesink Caldera",
+    "normalized_name": "firesink caldera",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Firesink Trench",
+    "normalized_name": "firesink trench",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Firitos-Alodrom",
+    "normalized_name": "firitos-alodrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Firos-Aiavam",
+    "normalized_name": "firos-aiavam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Firos-Enomaum",
+    "normalized_name": "firos-enomaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Firos-Ezatam",
+    "normalized_name": "firos-ezatam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Firos-Osinsum",
+    "normalized_name": "firos-osinsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fishy Business",
+    "normalized_name": "fishy business",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Flammog Desolation",
+    "normalized_name": "flammog desolation",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Flammog Fork",
+    "normalized_name": "flammog fork",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Flammog Valley",
+    "normalized_name": "flammog valley",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Flatriver Trough",
+    "normalized_name": "flatriver trough",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Flatrock Cliffs",
+    "normalized_name": "flatrock cliffs",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Flatrock Plateau",
+    "normalized_name": "flatrock plateau",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Flimmerair Steppe",
+    "normalized_name": "flimmerair steppe",
+    "zone_type": "red"
+  },
+  {
+    "name": "Floatshoal Bight",
+    "normalized_name": "floatshoal bight",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Floatshoal Fissure",
+    "normalized_name": "floatshoal fissure",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Floatshoal Floe",
+    "normalized_name": "floatshoal floe",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Flynsdell",
+    "normalized_name": "flynsdell",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Fog Fen",
+    "normalized_name": "fog fen",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Fones-Opavun",
+    "normalized_name": "fones-opavun",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fonitos-Amaurom",
+    "normalized_name": "fonitos-amaurom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fonos-Aiugsum",
+    "normalized_name": "fonos-aiugsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fonos-Oleraum",
+    "normalized_name": "fonos-oleraum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Forest Burrow",
+    "normalized_name": "forest burrow",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Forest Cross",
+    "normalized_name": "forest cross",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Forgotten Woods",
+    "normalized_name": "forgotten woods",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Foritos-Aiaylos",
+    "normalized_name": "foritos-aiaylos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Foros-Egoisum",
+    "normalized_name": "foros-egoisum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Foros-Uzazlum",
+    "normalized_name": "foros-uzazlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fort Sterling",
+    "normalized_name": "fort sterling",
+    "zone_type": "city"
+  },
+  {
+    "name": "Fort Sterling Market",
+    "normalized_name": "fort sterling market",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Fort Sterling Portal",
+    "normalized_name": "fort sterling portal",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Foues-Aeaosum",
+    "normalized_name": "foues-aeaosum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fouitos-Aiuttum",
+    "normalized_name": "fouitos-aiuttum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fouos-Agosaum",
+    "normalized_name": "fouos-agosaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fouos-Amaurom",
+    "normalized_name": "fouos-amaurom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fractured Ground",
+    "normalized_name": "fractured ground",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Frostbite Chasm",
+    "normalized_name": "frostbite chasm",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Frostbite Mountain",
+    "normalized_name": "frostbite mountain",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Frostpeak Ascent",
+    "normalized_name": "frostpeak ascent",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Frostpeak Vista",
+    "normalized_name": "frostpeak vista",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Frostseep Crevasse",
+    "normalized_name": "frostseep crevasse",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Frostseep Ravine",
+    "normalized_name": "frostseep ravine",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Frostspring Passage",
+    "normalized_name": "frostspring passage",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Frostspring Volcano",
+    "normalized_name": "frostspring volcano",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Furitos-Aiavam",
+    "normalized_name": "furitos-aiavam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fuyes-Izohun",
+    "normalized_name": "fuyes-izohun",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fuyitos-Acalun",
+    "normalized_name": "fuyitos-acalun",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fuyitos-Ayiotum",
+    "normalized_name": "fuyitos-ayiotum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fynes-Unavtum",
+    "normalized_name": "fynes-unavtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fynites-Aeaosum",
+    "normalized_name": "fynites-aeaosum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fynitos-Abalam",
+    "normalized_name": "fynitos-abalam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fynitos-Agosaum",
+    "normalized_name": "fynitos-agosaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fynitos-Aiugsum",
+    "normalized_name": "fynitos-aiugsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fynitos-Egoisum",
+    "normalized_name": "fynitos-egoisum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fynitos-Ezatam",
+    "normalized_name": "fynitos-ezatam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Fynos-Alodrom",
+    "normalized_name": "fynos-alodrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Garrow Fell",
+    "normalized_name": "garrow fell",
+    "zone_type": "red"
+  },
+  {
+    "name": "Giantweald Copse",
+    "normalized_name": "giantweald copse",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Giantweald Dale",
+    "normalized_name": "giantweald dale",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Giantweald Edge",
+    "normalized_name": "giantweald edge",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Giantweald Glade",
+    "normalized_name": "giantweald glade",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Giantweald Roots",
+    "normalized_name": "giantweald roots",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Giantweald Woods",
+    "normalized_name": "giantweald woods",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Glacierbreak Summit",
+    "normalized_name": "glacierbreak summit",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Glacierfall Canyon",
+    "normalized_name": "glacierfall canyon",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Glacierfall Cross",
+    "normalized_name": "glacierfall cross",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Glacierfall Fissure",
+    "normalized_name": "glacierfall fissure",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Glacierfall Pass",
+    "normalized_name": "glacierfall pass",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Glacierfall Passage",
+    "normalized_name": "glacierfall passage",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Glacierfall Valley",
+    "normalized_name": "glacierfall valley",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Goffers Knoll",
+    "normalized_name": "goffers knoll",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Goldshimmer Plain",
+    "normalized_name": "goldshimmer plain",
+    "zone_type": "red"
+  },
+  {
+    "name": "Gravemound Brim",
+    "normalized_name": "gravemound brim",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Gravemound Cliffs",
+    "normalized_name": "gravemound cliffs",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Gravemound Hills",
+    "normalized_name": "gravemound hills",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Gravemound Knoll",
+    "normalized_name": "gravemound knoll",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Gravemound Slope",
+    "normalized_name": "gravemound slope",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Greenhollow Copse",
+    "normalized_name": "greenhollow copse",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Greenhollow Vale",
+    "normalized_name": "greenhollow vale",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Greenshore Bay",
+    "normalized_name": "greenshore bay",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Greenshore Peninsula",
+    "normalized_name": "greenshore peninsula",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Gutras Hill",
+    "normalized_name": "gutras hill",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Gwan Gorge",
+    "normalized_name": "gwan gorge",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Haldon Tor",
+    "normalized_name": "haldon tor",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Hallowed Crypt",
+    "normalized_name": "hallowed crypt",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Hallowed Undercrypt",
+    "normalized_name": "hallowed undercrypt",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Hasitos-Avaolum",
+    "normalized_name": "hasitos-avaolum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hasitos-Umayaum",
+    "normalized_name": "hasitos-umayaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hasos-Agoitum",
+    "normalized_name": "hasos-agoitum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hasos-Ayousum",
+    "normalized_name": "hasos-ayousum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hasos-Inayaum",
+    "normalized_name": "hasos-inayaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hasos-Iuimaum",
+    "normalized_name": "hasos-iuimaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hasos-Osuorom",
+    "normalized_name": "hasos-osuorom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Haytor",
+    "normalized_name": "haytor",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Hebes-Ouaylos",
+    "normalized_name": "hebes-ouaylos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hebites-Exemrom",
+    "normalized_name": "hebites-exemrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hebitos-Atontum",
+    "normalized_name": "hebitos-atontum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hebos-Ulamsum",
+    "normalized_name": "hebos-ulamsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Heretic Cellar Network",
+    "normalized_name": "heretic cellar network",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Heritos-Exozlos",
+    "normalized_name": "heritos-exozlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Heritos-Eyoztum",
+    "normalized_name": "heritos-eyoztum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Heritos-Inayaum",
+    "normalized_name": "heritos-inayaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Heros-Atoyam",
+    "normalized_name": "heros-atoyam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hetitos-Iuaerom",
+    "normalized_name": "hetitos-iuaerom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "HIDEOUT",
+    "normalized_name": "hideout",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Hieos-Aiigaum",
+    "normalized_name": "hieos-aiigaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hieos-Avaolum",
+    "normalized_name": "hieos-avaolum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Highbole Glen",
+    "normalized_name": "highbole glen",
+    "zone_type": "red"
+  },
+  {
+    "name": "Highland Cross",
+    "normalized_name": "highland cross",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Highstone Grassland",
+    "normalized_name": "highstone grassland",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Highstone Loch",
+    "normalized_name": "highstone loch",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Highstone Meadow",
+    "normalized_name": "highstone meadow",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Highstone Mound",
+    "normalized_name": "highstone mound",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Highstone Plains",
+    "normalized_name": "highstone plains",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Highstone Plateau",
+    "normalized_name": "highstone plateau",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Hightree Borderlands",
+    "normalized_name": "hightree borderlands",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Hightree Cliffs",
+    "normalized_name": "hightree cliffs",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Hightree Dale",
+    "normalized_name": "hightree dale",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Hightree Enclave",
+    "normalized_name": "hightree enclave",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Hightree Glade",
+    "normalized_name": "hightree glade",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Hightree Hillock",
+    "normalized_name": "hightree hillock",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Hightree Isle",
+    "normalized_name": "hightree isle",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Hightree Lake",
+    "normalized_name": "hightree lake",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Hightree Levee",
+    "normalized_name": "hightree levee",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Hightree Pass",
+    "normalized_name": "hightree pass",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Hightree Steep",
+    "normalized_name": "hightree steep",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Hightree Strand",
+    "normalized_name": "hightree strand",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Hiles-Izizaum",
+    "normalized_name": "hiles-izizaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hilites-Ugumtum",
+    "normalized_name": "hilites-ugumtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hilitos-Aiigaum",
+    "normalized_name": "hilitos-aiigaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hilitos-Osuorom",
+    "normalized_name": "hilitos-osuorom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hiros-Exozlos",
+    "normalized_name": "hiros-exozlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hiros-Iuaerom",
+    "normalized_name": "hiros-iuaerom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "HomeTerritory Skirmish",
+    "normalized_name": "hometerritory skirmish",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Honites-Izizaum",
+    "normalized_name": "honites-izizaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Honitos-Uxeulum",
+    "normalized_name": "honitos-uxeulum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Honos-Oyezam",
+    "normalized_name": "honos-oyezam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Honos-Umayaum",
+    "normalized_name": "honos-umayaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hornbeam Wood",
+    "normalized_name": "hornbeam wood",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Horos-Ohenlum",
+    "normalized_name": "horos-ohenlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hures-Ugumtum",
+    "normalized_name": "hures-ugumtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hurites-Ieatun",
+    "normalized_name": "hurites-ieatun",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hurites-Ouaylos",
+    "normalized_name": "hurites-ouaylos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Huritos-Iuimaum",
+    "normalized_name": "huritos-iuimaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Huritos-Oiaelos",
+    "normalized_name": "huritos-oiaelos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Huros-Atontum",
+    "normalized_name": "huros-atontum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Huyes-Ogozlum",
+    "normalized_name": "huyes-ogozlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Huyitos-Agoitum",
+    "normalized_name": "huyitos-agoitum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Huyitos-Ohenlum",
+    "normalized_name": "huyitos-ohenlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Huyos-Eyoztum",
+    "normalized_name": "huyos-eyoztum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Huyos-Uxeulum",
+    "normalized_name": "huyos-uxeulum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hynes-Exemrom",
+    "normalized_name": "hynes-exemrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hynes-Ieatun",
+    "normalized_name": "hynes-ieatun",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hynites-Ogozlum",
+    "normalized_name": "hynites-ogozlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hynitos-Atoyam",
+    "normalized_name": "hynitos-atoyam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hynitos-Ayousum",
+    "normalized_name": "hynitos-ayousum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hynitos-Oyezam",
+    "normalized_name": "hynitos-oyezam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hynitos-Ulamsum",
+    "normalized_name": "hynitos-ulamsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Hynos-Oiaelos",
+    "normalized_name": "hynos-oiaelos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Iceburn Cliffs",
+    "normalized_name": "iceburn cliffs",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Iceburn Firth",
+    "normalized_name": "iceburn firth",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Iceburn Peaks",
+    "normalized_name": "iceburn peaks",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Iceburn Tundra",
+    "normalized_name": "iceburn tundra",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "In the Raven's Claws",
+    "normalized_name": "in the raven's claws",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Inis Mon",
+    "normalized_name": "inis mon",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "ISLAND-GUILD-0001a_ISL_DL_T1_NON",
+    "normalized_name": "island-guild-0001a_isl_dl_t1_non",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-GUILD-0001b_ISL_DL_T1_NON",
+    "normalized_name": "island-guild-0001b_isl_dl_t1_non",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-GUILD-0001c_ISL_DL_T1_NON",
+    "normalized_name": "island-guild-0001c_isl_dl_t1_non",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-GUILD-0001d_ISL_DL_T1_NON",
+    "normalized_name": "island-guild-0001d_isl_dl_t1_non",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-GUILD-0001e_ISL_DL_T1_NON",
+    "normalized_name": "island-guild-0001e_isl_dl_t1_non",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-GUILD-0001f_ISL_DL_T1_NON",
+    "normalized_name": "island-guild-0001f_isl_dl_t1_non",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-PLAYER-0001a_ISL_DL_T1_NON",
+    "normalized_name": "island-player-0001a_isl_dl_t1_non",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-PLAYER-0001b_ISL_DL_T1_NON",
+    "normalized_name": "island-player-0001b_isl_dl_t1_non",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-PLAYER-0001c_ISL_DL_T1_NON",
+    "normalized_name": "island-player-0001c_isl_dl_t1_non",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-PLAYER-0001d_ISL_DL_T1_NON",
+    "normalized_name": "island-player-0001d_isl_dl_t1_non",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-PLAYER-0001e_ISL_DL_T1_NON",
+    "normalized_name": "island-player-0001e_isl_dl_t1_non",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-PLAYER-0001f_ISL_DL_T1_NON",
+    "normalized_name": "island-player-0001f_isl_dl_t1_non",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-PLAYER-MISTS-0001a",
+    "normalized_name": "island-player-mists-0001a",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-PLAYER-MISTS-0001b",
+    "normalized_name": "island-player-mists-0001b",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-PLAYER-MISTS-0001c",
+    "normalized_name": "island-player-mists-0001c",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-PLAYER-MISTS-0001d",
+    "normalized_name": "island-player-mists-0001d",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-PLAYER-MISTS-0001e",
+    "normalized_name": "island-player-mists-0001e",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "ISLAND-PLAYER-MISTS-0001f",
+    "normalized_name": "island-player-mists-0001f",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Kilmar Tor",
+    "normalized_name": "kilmar tor",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Kindlegrass Steppe",
+    "normalized_name": "kindlegrass steppe",
+    "zone_type": "red"
+  },
+  {
+    "name": "Larchroad",
+    "normalized_name": "larchroad",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Large Crystal Realm",
+    "normalized_name": "large crystal realm",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Lazygrass Plain",
+    "normalized_name": "lazygrass plain",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "LEGACY-KEEPER-01",
+    "normalized_name": "legacy-keeper-01",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "LEGACY-KEEPER-SOLO-01",
+    "normalized_name": "legacy-keeper-solo-01",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "LEGACY-UNDEAD-01",
+    "normalized_name": "legacy-undead-01",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "LEGACY-UNDEAD-02",
+    "normalized_name": "legacy-undead-02",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Lewsdon Hill",
+    "normalized_name": "lewsdon hill",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Longfen Arms",
+    "normalized_name": "longfen arms",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Longfen Marsh",
+    "normalized_name": "longfen marsh",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Longfen Veins",
+    "normalized_name": "longfen veins",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Longmarch Meadow",
+    "normalized_name": "longmarch meadow",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Longshadow Plain",
+    "normalized_name": "longshadow plain",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Longtimber Glen",
+    "normalized_name": "longtimber glen",
+    "zone_type": "red"
+  },
+  {
+    "name": "Lumber Lunacy",
+    "normalized_name": "lumber lunacy",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Lurking Underneath",
+    "normalized_name": "lurking underneath",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Lymhurst",
+    "normalized_name": "lymhurst",
+    "zone_type": "city"
+  },
+  {
+    "name": "Lymhurst Market",
+    "normalized_name": "lymhurst market",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Lymhurst Portal",
+    "normalized_name": "lymhurst portal",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Malag Crevasse",
+    "normalized_name": "malag crevasse",
+    "zone_type": "red"
+  },
+  {
+    "name": "Mardale",
+    "normalized_name": "mardale",
+    "zone_type": "red"
+  },
+  {
+    "name": "Martlock",
+    "normalized_name": "martlock",
+    "zone_type": "city"
+  },
+  {
+    "name": "Martlock Market",
+    "normalized_name": "martlock market",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Martlock Portal",
+    "normalized_name": "martlock portal",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Mase Knoll",
+    "normalized_name": "mase knoll",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Mawar Gorge",
+    "normalized_name": "mawar gorge",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Meltwater Bog",
+    "normalized_name": "meltwater bog",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Meltwater Channel",
+    "normalized_name": "meltwater channel",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Meltwater Delta",
+    "normalized_name": "meltwater delta",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Meltwater Sump",
+    "normalized_name": "meltwater sump",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Merlyn's Rest",
+    "normalized_name": "merlyn's rest",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Morgana's Rest",
+    "normalized_name": "morgana's rest",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Mountain Cross",
+    "normalized_name": "mountain cross",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Mountain Fort",
+    "normalized_name": "mountain fort",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Mudfoot Mounds",
+    "normalized_name": "mudfoot mounds",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Mudfoot Sump",
+    "normalized_name": "mudfoot sump",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Munten Fell",
+    "normalized_name": "munten fell",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Munten Rise",
+    "normalized_name": "munten rise",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Munten Tundra",
+    "normalized_name": "munten tundra",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Murdergulch Cross",
+    "normalized_name": "murdergulch cross",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Murdergulch Divide",
+    "normalized_name": "murdergulch divide",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Murdergulch Gap",
+    "normalized_name": "murdergulch gap",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Murdergulch Ravine",
+    "normalized_name": "murdergulch ravine",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Murdergulch Trail",
+    "normalized_name": "murdergulch trail",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Murkweald",
+    "normalized_name": "murkweald",
+    "zone_type": "red"
+  },
+  {
+    "name": "Murky Fen",
+    "normalized_name": "murky fen",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Mushroom Cave",
+    "normalized_name": "mushroom cave",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Nightbloom Forest",
+    "normalized_name": "nightbloom forest",
+    "zone_type": "red"
+  },
+  {
+    "name": "Nightcreak Marsh",
+    "normalized_name": "nightcreak marsh",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Northstrand Beach",
+    "normalized_name": "northstrand beach",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Northstrand Dunes",
+    "normalized_name": "northstrand dunes",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Oakcopse",
+    "normalized_name": "oakcopse",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Oasitos-Aoeuam",
+    "normalized_name": "oasitos-aoeuam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oasos-Eraerom",
+    "normalized_name": "oasos-eraerom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oasos-Uromlum",
+    "normalized_name": "oasos-uromlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oebitos-Eraerom",
+    "normalized_name": "oebitos-eraerom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oebitos-Oyozam",
+    "normalized_name": "oebitos-oyozam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oebos-Ixakaum",
+    "normalized_name": "oebos-ixakaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oeritos-Ecunsum",
+    "normalized_name": "oeritos-ecunsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oeritos-Oyexlos",
+    "normalized_name": "oeritos-oyexlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oetos-Ofailos",
+    "normalized_name": "oetos-ofailos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oetos-Oyexlos",
+    "normalized_name": "oetos-oyexlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oieitos-Ixakaum",
+    "normalized_name": "oieitos-ixakaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oieos-Umiutum",
+    "normalized_name": "oieos-umiutum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oires-Oloblum",
+    "normalized_name": "oires-oloblum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oiritos-Eramtum",
+    "normalized_name": "oiritos-eramtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oiros-Alaiam",
+    "normalized_name": "oiros-alaiam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oonitos-Umiutum",
+    "normalized_name": "oonitos-umiutum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Ooros-Ataltum",
+    "normalized_name": "ooros-ataltum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Ooros-Ecunsum",
+    "normalized_name": "ooros-ecunsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oouitos-Alaiam",
+    "normalized_name": "oouitos-alaiam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Ore Adit",
+    "normalized_name": "ore adit",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Oures-Araosum",
+    "normalized_name": "oures-araosum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Ouritos-Ataltum",
+    "normalized_name": "ouritos-ataltum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Ouritos-Ofailos",
+    "normalized_name": "ouritos-ofailos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Ouyos-Aoeuam",
+    "normalized_name": "ouyos-aoeuam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Owlsong Glen",
+    "normalized_name": "owlsong glen",
+    "zone_type": "red"
+  },
+  {
+    "name": "Oynites-Araosum",
+    "normalized_name": "oynites-araosum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oynites-Oloblum",
+    "normalized_name": "oynites-oloblum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oynitos-Uromlum",
+    "normalized_name": "oynitos-uromlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oynos-Eramtum",
+    "normalized_name": "oynos-eramtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Oynos-Oyozam",
+    "normalized_name": "oynos-oyozam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Parchsand Cliffs",
+    "normalized_name": "parchsand cliffs",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Parchsand Drought",
+    "normalized_name": "parchsand drought",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Parchthroat Plain",
+    "normalized_name": "parchthroat plain",
+    "zone_type": "red"
+  },
+  {
+    "name": "Pasos-Avosam",
+    "normalized_name": "pasos-avosam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Pebos-Avosrom",
+    "normalized_name": "pebos-avosrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Pen Fenair",
+    "normalized_name": "pen fenair",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Pen Garn",
+    "normalized_name": "pen garn",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Pen Gent",
+    "normalized_name": "pen gent",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Pen Kerrig",
+    "normalized_name": "pen kerrig",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Pen Uchaf",
+    "normalized_name": "pen uchaf",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Peritos-Avosam",
+    "normalized_name": "peritos-avosam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Peritos-Oconun",
+    "normalized_name": "peritos-oconun",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Peros-Aiataum",
+    "normalized_name": "peros-aiataum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Petitos-Amayam",
+    "normalized_name": "petitos-amayam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Petitos-Avosrom",
+    "normalized_name": "petitos-avosrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Petos-Aietam",
+    "normalized_name": "petos-aietam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Pieos-Eterrom",
+    "normalized_name": "pieos-eterrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Pieos-Ofairom",
+    "normalized_name": "pieos-ofairom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Pilitos-Eterrom",
+    "normalized_name": "pilitos-eterrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Pinecopse",
+    "normalized_name": "pinecopse",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Pirites-Unatam",
+    "normalized_name": "pirites-unatam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Piritos-Ofavam",
+    "normalized_name": "piritos-ofavam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Piritos-Opabrom",
+    "normalized_name": "piritos-opabrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Ponitos-Aiayrom",
+    "normalized_name": "ponitos-aiayrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Poros-Aiayrom",
+    "normalized_name": "poros-aiayrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Poros-Oconun",
+    "normalized_name": "poros-oconun",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Poues-Unatam",
+    "normalized_name": "poues-unatam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Pouitos-Ofairom",
+    "normalized_name": "pouitos-ofairom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Preaching to the Dead",
+    "normalized_name": "preaching to the dead",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Prospector's Hope",
+    "normalized_name": "prospector's hope",
+    "zone_type": "blue"
+  },
+  {
+    "name": "PSG-0001",
+    "normalized_name": "psg-0001",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0002",
+    "normalized_name": "psg-0002",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0008",
+    "normalized_name": "psg-0008",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0009",
+    "normalized_name": "psg-0009",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0010",
+    "normalized_name": "psg-0010",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0011",
+    "normalized_name": "psg-0011",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0012",
+    "normalized_name": "psg-0012",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0013",
+    "normalized_name": "psg-0013",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0014",
+    "normalized_name": "psg-0014",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0015",
+    "normalized_name": "psg-0015",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0016",
+    "normalized_name": "psg-0016",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0017",
+    "normalized_name": "psg-0017",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0018",
+    "normalized_name": "psg-0018",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0019",
+    "normalized_name": "psg-0019",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0020",
+    "normalized_name": "psg-0020",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0021",
+    "normalized_name": "psg-0021",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0022",
+    "normalized_name": "psg-0022",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0023",
+    "normalized_name": "psg-0023",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0024",
+    "normalized_name": "psg-0024",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0025",
+    "normalized_name": "psg-0025",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0026",
+    "normalized_name": "psg-0026",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0027",
+    "normalized_name": "psg-0027",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0028",
+    "normalized_name": "psg-0028",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0029",
+    "normalized_name": "psg-0029",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0030",
+    "normalized_name": "psg-0030",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0031",
+    "normalized_name": "psg-0031",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0032",
+    "normalized_name": "psg-0032",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0033",
+    "normalized_name": "psg-0033",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0034",
+    "normalized_name": "psg-0034",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0035",
+    "normalized_name": "psg-0035",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0036",
+    "normalized_name": "psg-0036",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0037",
+    "normalized_name": "psg-0037",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0038",
+    "normalized_name": "psg-0038",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0039",
+    "normalized_name": "psg-0039",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0040",
+    "normalized_name": "psg-0040",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0041",
+    "normalized_name": "psg-0041",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0042",
+    "normalized_name": "psg-0042",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0043",
+    "normalized_name": "psg-0043",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0044",
+    "normalized_name": "psg-0044",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0045",
+    "normalized_name": "psg-0045",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0046",
+    "normalized_name": "psg-0046",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0047",
+    "normalized_name": "psg-0047",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0048",
+    "normalized_name": "psg-0048",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0049",
+    "normalized_name": "psg-0049",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0050",
+    "normalized_name": "psg-0050",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0051",
+    "normalized_name": "psg-0051",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0052",
+    "normalized_name": "psg-0052",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0053",
+    "normalized_name": "psg-0053",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-0054",
+    "normalized_name": "psg-0054",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-H-0001",
+    "normalized_name": "psg-h-0001",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "PSG-H-0002",
+    "normalized_name": "psg-h-0002",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Pures-Ouozlum",
+    "normalized_name": "pures-ouozlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Puros-Amayam",
+    "normalized_name": "puros-amayam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Puros-Ofavam",
+    "normalized_name": "puros-ofavam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Puyitos-Aiataum",
+    "normalized_name": "puyitos-aiataum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Pynites-Ouozlum",
+    "normalized_name": "pynites-ouozlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Pynitos-Aietam",
+    "normalized_name": "pynitos-aietam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Pynos-Opabrom",
+    "normalized_name": "pynos-opabrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Al-Nusom",
+    "normalized_name": "qiient-al-nusom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Al-Odesum",
+    "normalized_name": "qiient-al-odesum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Al-Qinsis",
+    "normalized_name": "qiient-al-qinsis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Al-Tersas",
+    "normalized_name": "qiient-al-tersas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Al-Viesis",
+    "normalized_name": "qiient-al-viesis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Al-Vynsis",
+    "normalized_name": "qiient-al-vynsis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Et-Nusas",
+    "normalized_name": "qiient-et-nusas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Et-Odetis",
+    "normalized_name": "qiient-et-odetis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Et-Qinsum",
+    "normalized_name": "qiient-et-qinsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Et-Tertum",
+    "normalized_name": "qiient-et-tertum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-In-Nutis",
+    "normalized_name": "qiient-in-nutis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-In-Odetum",
+    "normalized_name": "qiient-in-odetum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-In-Qinsis",
+    "normalized_name": "qiient-in-qinsis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-In-Tersom",
+    "normalized_name": "qiient-in-tersom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-In-Viesis",
+    "normalized_name": "qiient-in-viesis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-In-Vyntum",
+    "normalized_name": "qiient-in-vyntum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Nutis",
+    "normalized_name": "qiient-nutis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Oc-Odetum",
+    "normalized_name": "qiient-oc-odetum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Odesas",
+    "normalized_name": "qiient-odesas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Qi-Nusom",
+    "normalized_name": "qiient-qi-nusom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Qi-Odesas",
+    "normalized_name": "qiient-qi-odesas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Qi-Tersas",
+    "normalized_name": "qiient-qi-tersas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Qi-Vynsis",
+    "normalized_name": "qiient-qi-vynsis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Qinsum",
+    "normalized_name": "qiient-qinsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Sa-Odetis",
+    "normalized_name": "qiient-sa-odetis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Si-Nusas",
+    "normalized_name": "qiient-si-nusas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Si-Odesum",
+    "normalized_name": "qiient-si-odesum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Si-Tertum",
+    "normalized_name": "qiient-si-tertum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Tersom",
+    "normalized_name": "qiient-tersom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiient-Vyntum",
+    "normalized_name": "qiient-vyntum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiitun-Al-Duosum",
+    "normalized_name": "qiitun-al-duosum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiitun-Duosum",
+    "normalized_name": "qiitun-duosum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiitun-Et-Vietis",
+    "normalized_name": "qiitun-et-vietis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiitun-Et-Vynsom",
+    "normalized_name": "qiitun-et-vynsom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiitun-Si-Vynsom",
+    "normalized_name": "qiitun-si-vynsom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Qiitun-Vietis",
+    "normalized_name": "qiitun-vietis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quaent-Al-Nusis",
+    "normalized_name": "quaent-al-nusis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quaent-Al-Odesum",
+    "normalized_name": "quaent-al-odesum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quaent-Al-Qintis",
+    "normalized_name": "quaent-al-qintis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quaent-Al-Tersis",
+    "normalized_name": "quaent-al-tersis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quaent-Al-Viesom",
+    "normalized_name": "quaent-al-viesom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quaent-Al-Vynsum",
+    "normalized_name": "quaent-al-vynsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quaent-In-Nusis",
+    "normalized_name": "quaent-in-nusis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quaent-In-Odesum",
+    "normalized_name": "quaent-in-odesum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quaent-Qintis",
+    "normalized_name": "quaent-qintis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quaent-Tersis",
+    "normalized_name": "quaent-tersis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quaent-Viesom",
+    "normalized_name": "quaent-viesom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quaent-Vynsum",
+    "normalized_name": "quaent-vynsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quatun-Et-Nusas",
+    "normalized_name": "quatun-et-nusas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quatun-Et-Odetum",
+    "normalized_name": "quatun-et-odetum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quatun-Nusas",
+    "normalized_name": "quatun-nusas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Quatun-Odetum",
+    "normalized_name": "quatun-odetum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Razorrock Bank",
+    "normalized_name": "razorrock bank",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Razorrock Chasm",
+    "normalized_name": "razorrock chasm",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Razorrock Edge",
+    "normalized_name": "razorrock edge",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Razorrock Gulch",
+    "normalized_name": "razorrock gulch",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Razorrock Passage",
+    "normalized_name": "razorrock passage",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Razorrock Ravine",
+    "normalized_name": "razorrock ravine",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Razorrock Valley",
+    "normalized_name": "razorrock valley",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Razorrock Verge",
+    "normalized_name": "razorrock verge",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Redlake",
+    "normalized_name": "redlake",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Redstone Plain",
+    "normalized_name": "redstone plain",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Redtree Enclave",
+    "normalized_name": "redtree enclave",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Resource Skirmish",
+    "normalized_name": "resource skirmish",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Resource Skirmish 2",
+    "normalized_name": "resource skirmish 2",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Rivercopse Crossing",
+    "normalized_name": "rivercopse crossing",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Rivercopse Curve",
+    "normalized_name": "rivercopse curve",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Rivercopse Fount",
+    "normalized_name": "rivercopse fount",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Rivercopse Path",
+    "normalized_name": "rivercopse path",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Roastcorpse Steppe",
+    "normalized_name": "roastcorpse steppe",
+    "zone_type": "red"
+  },
+  {
+    "name": "Rock Adit",
+    "normalized_name": "rock adit",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Rowanwood",
+    "normalized_name": "rowanwood",
+    "zone_type": "red"
+  },
+  {
+    "name": "Runnel Sink",
+    "normalized_name": "runnel sink",
+    "zone_type": "red"
+  },
+  {
+    "name": "Runnelvein Bog",
+    "normalized_name": "runnelvein bog",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Runnelvein Sink",
+    "normalized_name": "runnelvein sink",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Runnelvein Slough",
+    "normalized_name": "runnelvein slough",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Russerdell",
+    "normalized_name": "russerdell",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Sabertooth Den",
+    "normalized_name": "sabertooth den",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Saddle Tor",
+    "normalized_name": "saddle tor",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Sandgust Cleft",
+    "normalized_name": "sandgust cleft",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Sandmount Ascent",
+    "normalized_name": "sandmount ascent",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sandmount Desert",
+    "normalized_name": "sandmount desert",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sandmount Esker",
+    "normalized_name": "sandmount esker",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sandmount Strand",
+    "normalized_name": "sandmount strand",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sandrift Coast",
+    "normalized_name": "sandrift coast",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sandrift Dunes",
+    "normalized_name": "sandrift dunes",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sandrift Expanse",
+    "normalized_name": "sandrift expanse",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sandrift Fringe",
+    "normalized_name": "sandrift fringe",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sandrift Prairie",
+    "normalized_name": "sandrift prairie",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sandrift Shore",
+    "normalized_name": "sandrift shore",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sandrift Steppe",
+    "normalized_name": "sandrift steppe",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sases-Aoarsum",
+    "normalized_name": "sases-aoarsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sases-Avuotum",
+    "normalized_name": "sases-avuotum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sasitos-Oyarlum",
+    "normalized_name": "sasitos-oyarlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sasitos-Ugersum",
+    "normalized_name": "sasitos-ugersum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sasitos-Umogaum",
+    "normalized_name": "sasitos-umogaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sasos-Abizaum",
+    "normalized_name": "sasos-abizaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sasos-Egeylos",
+    "normalized_name": "sasos-egeylos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sasos-Oiozlum",
+    "normalized_name": "sasos-oiozlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Scuttlesink Marsh",
+    "normalized_name": "scuttlesink marsh",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Scuttlesink Mouth",
+    "normalized_name": "scuttlesink mouth",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Scuttlesink Pools",
+    "normalized_name": "scuttlesink pools",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sebos-Avoirom",
+    "normalized_name": "sebos-avoirom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sebos-Oyohun",
+    "normalized_name": "sebos-oyohun",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sebos-Ugersum",
+    "normalized_name": "sebos-ugersum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Al-Duosom",
+    "normalized_name": "secent-al-duosom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Al-Nutum",
+    "normalized_name": "secent-al-nutum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Al-Odetis",
+    "normalized_name": "secent-al-odetis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Al-Qinsom",
+    "normalized_name": "secent-al-qinsom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Al-Tersum",
+    "normalized_name": "secent-al-tersum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Al-Viesum",
+    "normalized_name": "secent-al-viesum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Duosom",
+    "normalized_name": "secent-duosom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Et-Odesis",
+    "normalized_name": "secent-et-odesis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Et-Qinsas",
+    "normalized_name": "secent-et-qinsas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Et-Vyntum",
+    "normalized_name": "secent-et-vyntum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-In-Tersum",
+    "normalized_name": "secent-in-tersum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Nutum",
+    "normalized_name": "secent-nutum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Odesom",
+    "normalized_name": "secent-odesom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Qi-Odesom",
+    "normalized_name": "secent-qi-odesom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Qi-Qinsom",
+    "normalized_name": "secent-qi-qinsom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Sa-Odesis",
+    "normalized_name": "secent-sa-odesis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Si-Odetis",
+    "normalized_name": "secent-si-odetis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Si-Qinsas",
+    "normalized_name": "secent-si-qinsas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Viesum",
+    "normalized_name": "secent-viesum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Secent-Vyntum",
+    "normalized_name": "secent-vyntum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sectun-Al-Vyntis",
+    "normalized_name": "sectun-al-vyntis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sectun-Et-Tersas",
+    "normalized_name": "sectun-et-tersas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sectun-In-Odesis",
+    "normalized_name": "sectun-in-odesis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sectun-In-Qinsom",
+    "normalized_name": "sectun-in-qinsom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sectun-In-Vyntis",
+    "normalized_name": "sectun-in-vyntis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sectun-Oc-Odesis",
+    "normalized_name": "sectun-oc-odesis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sectun-Qinsom",
+    "normalized_name": "sectun-qinsom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Sectun-Tersas",
+    "normalized_name": "sectun-tersas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Seritos-Egeylos",
+    "normalized_name": "seritos-egeylos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Seritos-Onaytum",
+    "normalized_name": "seritos-onaytum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Setent-Al-Duosas",
+    "normalized_name": "setent-al-duosas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Setent-Al-Qinsum",
+    "normalized_name": "setent-al-qinsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Setent-Al-Vietis",
+    "normalized_name": "setent-al-vietis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Setent-Duosas",
+    "normalized_name": "setent-duosas",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Setent-Et-Nusum",
+    "normalized_name": "setent-et-nusum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Setent-Et-Qintis",
+    "normalized_name": "setent-et-qintis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Setent-In-Qinsum",
+    "normalized_name": "setent-in-qinsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Setent-Nusum",
+    "normalized_name": "setent-nusum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Setent-Qintis",
+    "normalized_name": "setent-qintis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Setent-Vietis",
+    "normalized_name": "setent-vietis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Setitos-Obobrom",
+    "normalized_name": "setitos-obobrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Setos-Aiaitum",
+    "normalized_name": "setos-aiaitum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Setos-Avamsum",
+    "normalized_name": "setos-avamsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Settun-Al-Nusis",
+    "normalized_name": "settun-al-nusis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Settun-Al-Odetum",
+    "normalized_name": "settun-al-odetum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Settun-Al-Tersom",
+    "normalized_name": "settun-al-tersom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Settun-Al-Vynsis",
+    "normalized_name": "settun-al-vynsis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Settun-Et-Odetum",
+    "normalized_name": "settun-et-odetum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Settun-In-Nusis",
+    "normalized_name": "settun-in-nusis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Settun-In-Odetum",
+    "normalized_name": "settun-in-odetum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Settun-Odetum",
+    "normalized_name": "settun-odetum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Settun-Tersom",
+    "normalized_name": "settun-tersom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Settun-Vynsis",
+    "normalized_name": "settun-vynsis",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Shaleheath Hills",
+    "normalized_name": "shaleheath hills",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Shaleheath Steep",
+    "normalized_name": "shaleheath steep",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Shiftshadow Expanse",
+    "normalized_name": "shiftshadow expanse",
+    "zone_type": "red"
+  },
+  {
+    "name": "Sieos-Ofugtum",
+    "normalized_name": "sieos-ofugtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Silitos-Abizaum",
+    "normalized_name": "silitos-abizaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Silos-Apenlum",
+    "normalized_name": "silos-apenlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Silos-Oyarlum",
+    "normalized_name": "silos-oyarlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Siritos-Avoirom",
+    "normalized_name": "siritos-avoirom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Siritos-Oyohun",
+    "normalized_name": "siritos-oyohun",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Siros-Obobrom",
+    "normalized_name": "siros-obobrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Siros-Ofurlos",
+    "normalized_name": "siros-ofurlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Skullmarsh Lower",
+    "normalized_name": "skullmarsh lower",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Skullmarsh Upper",
+    "normalized_name": "skullmarsh upper",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Skylake Bridge",
+    "normalized_name": "skylake bridge",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Skylake Hinterlands",
+    "normalized_name": "skylake hinterlands",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Skysand Plateau",
+    "normalized_name": "skysand plateau",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Skysand Ridge",
+    "normalized_name": "skysand ridge",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Slakesands Canyon",
+    "normalized_name": "slakesands canyon",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Slakesands Mesa",
+    "normalized_name": "slakesands mesa",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sleetwater Basin",
+    "normalized_name": "sleetwater basin",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Slimehag",
+    "normalized_name": "slimehag",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Slithertail Marsh",
+    "normalized_name": "slithertail marsh",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Slowtree Plain",
+    "normalized_name": "slowtree plain",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Smoothfloor Cleft",
+    "normalized_name": "smoothfloor cleft",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Snapshaft Trough",
+    "normalized_name": "snapshaft trough",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Sonitos-Ayailos",
+    "normalized_name": "sonitos-ayailos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Soritos-Aiaitum",
+    "normalized_name": "soritos-aiaitum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Soritos-Apenlum",
+    "normalized_name": "soritos-apenlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Soritos-Avamsum",
+    "normalized_name": "soritos-avamsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Soros-Axaesum",
+    "normalized_name": "soros-axaesum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Soues-Uzurtum",
+    "normalized_name": "soues-uzurtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Souitos-Oiozlum",
+    "normalized_name": "souitos-oiozlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Souos-Availos",
+    "normalized_name": "souos-availos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Souos-Ososlos",
+    "normalized_name": "souos-ososlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Souos-Umogaum",
+    "normalized_name": "souos-umogaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Southgrove Copse",
+    "normalized_name": "southgrove copse",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Southgrove Escarp",
+    "normalized_name": "southgrove escarp",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Southgrove Thicket",
+    "normalized_name": "southgrove thicket",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Spectral Sump",
+    "normalized_name": "spectral sump",
+    "zone_type": "red"
+  },
+  {
+    "name": "Spindlewood",
+    "normalized_name": "spindlewood",
+    "zone_type": "red"
+  },
+  {
+    "name": "Springsump Basin",
+    "normalized_name": "springsump basin",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Springsump Melt",
+    "normalized_name": "springsump melt",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Springsump Wetland",
+    "normalized_name": "springsump wetland",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Stagbourne",
+    "normalized_name": "stagbourne",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Steelhide Meadow",
+    "normalized_name": "steelhide meadow",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Steppe Cross",
+    "normalized_name": "steppe cross",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Stinkhag",
+    "normalized_name": "stinkhag",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Stone Wars",
+    "normalized_name": "stone wars",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Stonelake Fields",
+    "normalized_name": "stonelake fields",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Stonelake Hillock",
+    "normalized_name": "stonelake hillock",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Stonemouth Bay",
+    "normalized_name": "stonemouth bay",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Stonemouth Northbluff",
+    "normalized_name": "stonemouth northbluff",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Stonemouth Southbluff",
+    "normalized_name": "stonemouth southbluff",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Stoneroot Caverns",
+    "normalized_name": "stoneroot caverns",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Stumprot Swamp",
+    "normalized_name": "stumprot swamp",
+    "zone_type": "red"
+  },
+  {
+    "name": "Sunfang Approach",
+    "normalized_name": "sunfang approach",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sunfang Cliffs",
+    "normalized_name": "sunfang cliffs",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sunfang Dawn",
+    "normalized_name": "sunfang dawn",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sunfang Ravine",
+    "normalized_name": "sunfang ravine",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sunfang Wasteland",
+    "normalized_name": "sunfang wasteland",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sunkenbough Spring",
+    "normalized_name": "sunkenbough spring",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sunkenbough Woods",
+    "normalized_name": "sunkenbough woods",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sunstrand Delta",
+    "normalized_name": "sunstrand delta",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sunstrand Dunes",
+    "normalized_name": "sunstrand dunes",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sunstrand Quicksands",
+    "normalized_name": "sunstrand quicksands",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Sunstrand Shoal",
+    "normalized_name": "sunstrand shoal",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Suyites-Avuotum",
+    "normalized_name": "suyites-avuotum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Suyites-Uzurtum",
+    "normalized_name": "suyites-uzurtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Suyitos-Axaesum",
+    "normalized_name": "suyitos-axaesum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Suyitos-Ofugtum",
+    "normalized_name": "suyitos-ofugtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Suyitos-Oyarlos",
+    "normalized_name": "suyitos-oyarlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Suyos-Onaytum",
+    "normalized_name": "suyos-onaytum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Swamp Burrow",
+    "normalized_name": "swamp burrow",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Swamp Cross",
+    "normalized_name": "swamp cross",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Swiftsands Basin",
+    "normalized_name": "swiftsands basin",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Swiftsands Chaparral",
+    "normalized_name": "swiftsands chaparral",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Swiftsands Plain",
+    "normalized_name": "swiftsands plain",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Synites-Aoarsum",
+    "normalized_name": "synites-aoarsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Synitos-Availos",
+    "normalized_name": "synitos-availos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Synitos-Ofurlos",
+    "normalized_name": "synitos-ofurlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Synitos-Ososlos",
+    "normalized_name": "synitos-ososlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Synos-Ayailos",
+    "normalized_name": "synos-ayailos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Synos-Oyarlos",
+    "normalized_name": "synos-oyarlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tasitos-Obayam",
+    "normalized_name": "tasitos-obayam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tasitos-Ulaurom",
+    "normalized_name": "tasitos-ulaurom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tasos-Iriglos",
+    "normalized_name": "tasos-iriglos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tebitos-Igaelum",
+    "normalized_name": "tebitos-igaelum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tebitos-Odoxlum",
+    "normalized_name": "tebitos-odoxlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Teros-Auiusum",
+    "normalized_name": "teros-auiusum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tetitos-Ayoslum",
+    "normalized_name": "tetitos-ayoslum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tetos-Igaelum",
+    "normalized_name": "tetos-igaelum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tetos-Ulaurom",
+    "normalized_name": "tetos-ulaurom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tharcal Fissure",
+    "normalized_name": "tharcal fissure",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "The Arena",
+    "normalized_name": "the arena",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "The Boneyard",
+    "normalized_name": "the boneyard",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "The Citadel",
+    "normalized_name": "the citadel",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "The Courtyard",
+    "normalized_name": "the courtyard",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "The Cove",
+    "normalized_name": "the cove",
+    "zone_type": "blue"
+  },
+  {
+    "name": "The Fortress",
+    "normalized_name": "the fortress",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "The Four Bridges",
+    "normalized_name": "the four bridges",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "The Hill",
+    "normalized_name": "the hill",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "The Lighthouse",
+    "normalized_name": "the lighthouse",
+    "zone_type": "blue"
+  },
+  {
+    "name": "The Pit",
+    "normalized_name": "the pit",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "The Plains",
+    "normalized_name": "the plains",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "The Traverse",
+    "normalized_name": "the traverse",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "The Tribunal",
+    "normalized_name": "the tribunal",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "The Underway",
+    "normalized_name": "the underway",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Thetford",
+    "normalized_name": "thetford",
+    "zone_type": "city"
+  },
+  {
+    "name": "Thetford Market",
+    "normalized_name": "thetford market",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Thetford Portal",
+    "normalized_name": "thetford portal",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Thirstwater Gully",
+    "normalized_name": "thirstwater gully",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Thirstwater Steppe",
+    "normalized_name": "thirstwater steppe",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Thirstwater Waste",
+    "normalized_name": "thirstwater waste",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Three Sisters",
+    "normalized_name": "three sisters",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Thunderrock Ascent",
+    "normalized_name": "thunderrock ascent",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Thunderrock Draw",
+    "normalized_name": "thunderrock draw",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Thunderrock Rapids",
+    "normalized_name": "thunderrock rapids",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Thunderrock Upland",
+    "normalized_name": "thunderrock upland",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Tieitos-Eyexrom",
+    "normalized_name": "tieitos-eyexrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tieitos-Ouultum",
+    "normalized_name": "tieitos-ouultum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tieos-Ayoslum",
+    "normalized_name": "tieos-ayoslum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tilitos-Ataglos",
+    "normalized_name": "tilitos-ataglos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Timberscar Copse",
+    "normalized_name": "timberscar copse",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Timberscar Dell",
+    "normalized_name": "timberscar dell",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Timberslope Bridge",
+    "normalized_name": "timberslope bridge",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Timberslope Dell",
+    "normalized_name": "timberslope dell",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Timberslope Grove",
+    "normalized_name": "timberslope grove",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Timbertop Dale",
+    "normalized_name": "timbertop dale",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Timbertop Escarp",
+    "normalized_name": "timbertop escarp",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Timbertop Wood",
+    "normalized_name": "timbertop wood",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Tiros-Odoxlum",
+    "normalized_name": "tiros-odoxlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tiros-Ouultum",
+    "normalized_name": "tiros-ouultum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tonitos-Igurlum",
+    "normalized_name": "tonitos-igurlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tonitos-Uxavrom",
+    "normalized_name": "tonitos-uxavrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tonos-Aboysum",
+    "normalized_name": "tonos-aboysum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tonos-Obayam",
+    "normalized_name": "tonos-obayam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Toritos-Iriglos",
+    "normalized_name": "toritos-iriglos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Touos-Ataglos",
+    "normalized_name": "touos-ataglos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Touos-Uoemtum",
+    "normalized_name": "touos-uoemtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Trinity Hall",
+    "normalized_name": "trinity hall",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Turitos-Atatlos",
+    "normalized_name": "turitos-atatlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Turitos-Uoemtum",
+    "normalized_name": "turitos-uoemtum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tuyitos-Aboysum",
+    "normalized_name": "tuyitos-aboysum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tuyitos-Auiusum",
+    "normalized_name": "tuyitos-auiusum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Twinchannel Narrows",
+    "normalized_name": "twinchannel narrows",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Tynos-Atatlos",
+    "normalized_name": "tynos-atatlos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tynos-Eyexrom",
+    "normalized_name": "tynos-eyexrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tynos-Igurlum",
+    "normalized_name": "tynos-igurlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Tynos-Uxavrom",
+    "normalized_name": "tynos-uxavrom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Unhallowed Cloister",
+    "normalized_name": "unhallowed cloister",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "VegAnimTest",
+    "normalized_name": "veganimtest",
+    "zone_type": "unknown"
+  },
+  {
+    "name": "Vixen Tor",
+    "normalized_name": "vixen tor",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Wailing Bulwark",
+    "normalized_name": "wailing bulwark",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Wanderlure Basin",
+    "normalized_name": "wanderlure basin",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Watchwood Bluffs",
+    "normalized_name": "watchwood bluffs",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Watchwood Grove",
+    "normalized_name": "watchwood grove",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Watchwood Lakeside",
+    "normalized_name": "watchwood lakeside",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Watchwood Precipice",
+    "normalized_name": "watchwood precipice",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Westweald Shore",
+    "normalized_name": "westweald shore",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Westweald Thicket",
+    "normalized_name": "westweald thicket",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Wetgrave Bog",
+    "normalized_name": "wetgrave bog",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Wetgrave Marsh",
+    "normalized_name": "wetgrave marsh",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Wetgrave Swale",
+    "normalized_name": "wetgrave swale",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Whitebank Cross",
+    "normalized_name": "whitebank cross",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Whitebank Descent",
+    "normalized_name": "whitebank descent",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Whitebank Ridge",
+    "normalized_name": "whitebank ridge",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Whitebank Shore",
+    "normalized_name": "whitebank shore",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Whitebank Stream",
+    "normalized_name": "whitebank stream",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Whitebank Wall",
+    "normalized_name": "whitebank wall",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Whitecliff Expanse",
+    "normalized_name": "whitecliff expanse",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Whitecliff Peak",
+    "normalized_name": "whitecliff peak",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Whitepeak Ascent",
+    "normalized_name": "whitepeak ascent",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Whitepeak Spring",
+    "normalized_name": "whitepeak spring",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Whitepeak Tundra",
+    "normalized_name": "whitepeak tundra",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Whitewall Pass",
+    "normalized_name": "whitewall pass",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Whitewall Ridge",
+    "normalized_name": "whitewall ridge",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Widemoor Delta",
+    "normalized_name": "widemoor delta",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Widemoor End",
+    "normalized_name": "widemoor end",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Widemoor Estuary",
+    "normalized_name": "widemoor estuary",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Widemoor Fen",
+    "normalized_name": "widemoor fen",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Widemoor Flats",
+    "normalized_name": "widemoor flats",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Widemoor Hills",
+    "normalized_name": "widemoor hills",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Widemoor Pool",
+    "normalized_name": "widemoor pool",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Widemoor Shore",
+    "normalized_name": "widemoor shore",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Widemoor Woods",
+    "normalized_name": "widemoor woods",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Willow Wood",
+    "normalized_name": "willow wood",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Willowshade Hills",
+    "normalized_name": "willowshade hills",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Willowshade Icemarsh",
+    "normalized_name": "willowshade icemarsh",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Willowshade Lake",
+    "normalized_name": "willowshade lake",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Willowshade Mire",
+    "normalized_name": "willowshade mire",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Willowshade Pools",
+    "normalized_name": "willowshade pools",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Willowshade Sink",
+    "normalized_name": "willowshade sink",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Willowshade Wetlands",
+    "normalized_name": "willowshade wetlands",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Willowsigh Marsh",
+    "normalized_name": "willowsigh marsh",
+    "zone_type": "yellow"
+  },
+  {
+    "name": "Windgrass Border",
+    "normalized_name": "windgrass border",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Windgrass Coast",
+    "normalized_name": "windgrass coast",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Windgrass Fields",
+    "normalized_name": "windgrass fields",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Windgrass Gully",
+    "normalized_name": "windgrass gully",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Windgrass Precipice",
+    "normalized_name": "windgrass precipice",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Windgrass Rill",
+    "normalized_name": "windgrass rill",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Windgrass Terrace",
+    "normalized_name": "windgrass terrace",
+    "zone_type": "outlands_black"
+  },
+  {
+    "name": "Windripple Fen",
+    "normalized_name": "windripple fen",
+    "zone_type": "blue"
+  },
+  {
+    "name": "Wispwhisper Marsh",
+    "normalized_name": "wispwhisper marsh",
+    "zone_type": "red"
+  },
+  {
+    "name": "Wyre Forest",
+    "normalized_name": "wyre forest",
+    "zone_type": "red"
+  },
+  {
+    "name": "Xases-Ataglos",
+    "normalized_name": "xases-ataglos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xases-Oxoulum",
+    "normalized_name": "xases-oxoulum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xasos-Aeoilos",
+    "normalized_name": "xasos-aeoilos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xasos-Aoemaum",
+    "normalized_name": "xasos-aoemaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xasos-Oneulum",
+    "normalized_name": "xasos-oneulum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xebitos-Oyogam",
+    "normalized_name": "xebitos-oyogam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xebos-Emimsum",
+    "normalized_name": "xebos-emimsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xebos-Exostum",
+    "normalized_name": "xebos-exostum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xerites-Oxoulum",
+    "normalized_name": "xerites-oxoulum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xetitos-Emimsum",
+    "normalized_name": "xetitos-emimsum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xetitos-Oneulum",
+    "normalized_name": "xetitos-oneulum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xetos-Obursum",
+    "normalized_name": "xetos-obursum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xiles-Aiavlum",
+    "normalized_name": "xiles-aiavlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xilitos-Aoemaum",
+    "normalized_name": "xilitos-aoemaum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xilos-Osayam",
+    "normalized_name": "xilos-osayam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xiros-Aiairom",
+    "normalized_name": "xiros-aiairom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xonites-Aiavlum",
+    "normalized_name": "xonites-aiavlum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xoritos-Aiairom",
+    "normalized_name": "xoritos-aiairom",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xoritos-Exostum",
+    "normalized_name": "xoritos-exostum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xoritos-Osayam",
+    "normalized_name": "xoritos-osayam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xouitos-Aeoilos",
+    "normalized_name": "xouitos-aeoilos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xouitos-Eyoztum",
+    "normalized_name": "xouitos-eyoztum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xouos-Aioblos",
+    "normalized_name": "xouos-aioblos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xurites-Ataglos",
+    "normalized_name": "xurites-ataglos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xuros-Eyoztum",
+    "normalized_name": "xuros-eyoztum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xuyitos-Aioblos",
+    "normalized_name": "xuyitos-aioblos",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xynitos-Obursum",
+    "normalized_name": "xynitos-obursum",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Xynos-Oyogam",
+    "normalized_name": "xynos-oyogam",
+    "zone_type": "avalon"
+  },
+  {
+    "name": "Yew Wood",
+    "normalized_name": "yew wood",
+    "zone_type": "yellow"
+  }
+]
