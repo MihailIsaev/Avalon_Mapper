@@ -161,10 +161,26 @@ function Ensure-BuildTools {
 }
 
 function Invoke-InVs($DevCmd, $Arch, $Command) {
-    $escapedDevCmd = $DevCmd.Replace('"', '\"')
-    $escapedCommand = $Command.Replace('"', '\"')
-    & cmd.exe /d /s /c "`"$escapedDevCmd`" -arch=$Arch -host_arch=$Arch && $escapedCommand"
-    if ($LASTEXITCODE -ne 0) {
+    $tempCmd = Join-Path $env:TEMP ("avalon-mapper-dev-" + [Guid]::NewGuid().ToString("N") + ".cmd")
+    $content = @(
+        "@echo off",
+        "setlocal",
+        "call `"$DevCmd`" -arch=$Arch -host_arch=$Arch",
+        "if errorlevel 1 exit /b %errorlevel%",
+        $Command,
+        "exit /b %errorlevel%"
+    )
+
+    try {
+        Set-Content -Path $tempCmd -Value $content -Encoding ASCII
+        & cmd.exe /d /s /c "`"$tempCmd`""
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        Remove-Item $tempCmd -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($exitCode -ne 0) {
         throw "Command failed: $Command"
     }
 }
