@@ -998,14 +998,6 @@ fn register_windows_hotkey(id: i32, binding: &HotkeyBinding, registered_ids: &mu
         return;
     };
     let modifiers = windows_hotkey_modifiers(binding) | windows_hotkeys::MOD_NOREPEAT;
-    if modifiers == windows_hotkeys::MOD_NOREPEAT {
-        eprintln!(
-            "[windows-hotkey] skipping hotkey id={id} key_code={} because it has no modifier",
-            binding.key_code
-        );
-        return;
-    }
-
     let ok = unsafe { windows_hotkeys::RegisterHotKey(std::ptr::null_mut(), id, modifiers, vk) };
     if ok == 0 {
         let error = std::io::Error::last_os_error();
@@ -2315,17 +2307,7 @@ fn kill_stale_windows_overlay_helpers() {
         Ok(output) if output.status.success() => {
             eprintln!("[overlay-helper] stopped stale AvalonOverlayHelper.exe processes");
         }
-        Ok(output) => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let text = format!("{stdout}\n{stderr}");
-            if !text.contains("not found") && !text.contains("не найден") {
-                let trimmed = text.trim();
-                if !trimmed.is_empty() {
-                    eprintln!("[overlay-helper] taskkill reported: {trimmed}");
-                }
-            }
-        }
+        Ok(_) => {}
         Err(err) => {
             eprintln!("[overlay-helper] could not run taskkill for stale helpers: {err}");
         }
