@@ -2597,6 +2597,18 @@ fn ensure_windows_overlay_helper(app: &AppHandle) -> Result<PathBuf, String> {
             .join("native")
             .join("windows")
             .join("AvalonOverlayHelper")
+            .join("bin")
+            .join("Release")
+            .join("net8.0-windows")
+            .join("win-arm64")
+            .join("publish")
+            .join(exe_name),
+    );
+    candidates.push(
+        project_root
+            .join("native")
+            .join("windows")
+            .join("AvalonOverlayHelper")
             .join(exe_name),
     );
 
@@ -2607,7 +2619,7 @@ fn ensure_windows_overlay_helper(app: &AppHandle) -> Result<PathBuf, String> {
     }
 
     Err(format!(
-        "Missing Windows overlay helper. Build it with `dotnet publish -c Release -r win-x64 --self-contained`, then copy AvalonOverlayHelper.exe into a Tauri resource path. Checked: {}",
+        "Missing Windows overlay helper. Build it with `dotnet publish -c Release -r win-x64 --self-contained` on x64 Windows or `dotnet publish -c Release -r win-arm64 --self-contained` on ARM64 Windows, then copy AvalonOverlayHelper.exe into a Tauri resource path. Checked: {}",
         candidates
             .iter()
             .map(|path| path.display().to_string())
