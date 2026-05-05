@@ -1744,6 +1744,7 @@ fn capture_current_location(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<CaptureOutcome, String> {
+    eprintln!("[capture] current-location capture requested from UI");
     let outcome = capture_current_location_inner(&app, &state)?;
     refresh_map_overlay(&app, &state)?;
     Ok(outcome)
@@ -1754,6 +1755,7 @@ fn capture_portal_destination(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<CaptureOutcome, String> {
+    eprintln!("[capture] portal capture requested from UI");
     let outcome = capture_portal_destination_inner(&app, &state)?;
     refresh_map_overlay(&app, &state)?;
     Ok(outcome)
@@ -2580,30 +2582,25 @@ fn ensure_windows_overlay_helper(app: &AppHandle) -> Result<PathBuf, String> {
         }
     }
 
-    candidates.push(
-        project_root
-            .join("native")
-            .join("windows")
-            .join("AvalonOverlayHelper")
-            .join("bin")
-            .join("Release")
-            .join("net8.0-windows")
-            .join("win-x64")
-            .join("publish")
-            .join(exe_name),
-    );
-    candidates.push(
-        project_root
-            .join("native")
-            .join("windows")
-            .join("AvalonOverlayHelper")
-            .join("bin")
-            .join("Release")
-            .join("net8.0-windows")
-            .join("win-arm64")
-            .join("publish")
-            .join(exe_name),
-    );
+    let publish_rids = if cfg!(target_arch = "aarch64") {
+        ["win-arm64", "win-x64"]
+    } else {
+        ["win-x64", "win-arm64"]
+    };
+    for rid in publish_rids {
+        candidates.push(
+            project_root
+                .join("native")
+                .join("windows")
+                .join("AvalonOverlayHelper")
+                .join("bin")
+                .join("Release")
+                .join("net8.0-windows")
+                .join(rid)
+                .join("publish")
+                .join(exe_name),
+        );
+    }
     candidates.push(
         project_root
             .join("native")
@@ -2629,11 +2626,16 @@ fn ensure_windows_overlay_helper(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 fn capture_current_location_inner(app: &AppHandle, state: &AppState) -> Result<CaptureOutcome, String> {
+    eprintln!("[capture] loading current_location region");
     let region = {
         let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
         load_region_by_key(&conn, "current_location")?
             .ok_or_else(|| "Select the current-location region before capturing".to_string())?
     };
+    eprintln!(
+        "[capture] current_location region x={} y={} width={} height={}",
+        region.x, region.y, region.width, region.height
+    );
     let started = Instant::now();
     let ocr = run_capture_ocr(app, state, "current", &region, false, None)?;
     let capture_ms = started.elapsed().as_millis() as i64;
@@ -2642,11 +2644,16 @@ fn capture_current_location_inner(app: &AppHandle, state: &AppState) -> Result<C
 }
 
 fn capture_portal_destination_inner(app: &AppHandle, state: &AppState) -> Result<CaptureOutcome, String> {
+    eprintln!("[capture] loading portal_tooltip region");
     let region = {
         let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
         load_region_by_key(&conn, "portal_tooltip")?
             .ok_or_else(|| "Configure the portal tooltip box before capturing".to_string())?
     };
+    eprintln!(
+        "[capture] portal_tooltip region x={} y={} width={} height={} anchor=({:?},{:?})",
+        region.x, region.y, region.width, region.height, region.anchor_x, region.anchor_y
+    );
     let started = Instant::now();
     let portal_anchor = region.anchor_x.zip(region.anchor_y);
     let center_cursor = portal_anchor.is_none();
@@ -2665,6 +2672,7 @@ fn run_capture_ocr(
     portal_anchor: Option<(f64, f64)>,
 ) -> Result<CaptureOcrResult, String> {
     let helper = ensure_native_overlay_helper(app)?;
+    eprintln!("[capture] running helper={} kind={kind}", helper.display());
     fs::create_dir_all(&state.capture_dir)
         .map_err(|err| format!("Could not create capture directory: {err}"))?;
     let mut command = Command::new(helper);
@@ -2994,6 +3002,7 @@ fn handle_hotkey_capture(
     paddle_ocr: &Arc<Mutex<Option<PaddleOcrProcess>>>,
     kind: &str,
 ) -> Result<(), String> {
+    eprintln!("[capture-hotkey] {kind} capture requested from overlay hotkey");
     let mut conn = Connection::open(db_path).map_err(db_err)?;
     initialize_schema(&conn).map_err(db_err)?;
     let region_key = if kind == "portal" {
@@ -3003,6 +3012,10 @@ fn handle_hotkey_capture(
     };
     let region = load_region_by_key(&conn, region_key)?
         .ok_or_else(|| format!("Missing {region_key} region"))?;
+    eprintln!(
+        "[capture-hotkey] region key={region_key} x={} y={} width={} height={}",
+        region.x, region.y, region.width, region.height
+    );
     let started = Instant::now();
     let portal_anchor = if kind == "portal" { region.anchor_x.zip(region.anchor_y) } else { None };
     let center_cursor = if kind == "portal" { portal_anchor.is_none() } else { false };

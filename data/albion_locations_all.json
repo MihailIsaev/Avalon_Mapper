@@ -287,7 +287,7 @@
   {
     "name": "Carns Hill",
     "normalized_name": "carns hill",
-    "zone_type": "red"
+    "zone_type": "yellow"
   },
   {
     "name": "Cases-Ugumlos",
@@ -1022,7 +1022,7 @@
   {
     "name": "Felniks Hill",
     "normalized_name": "felniks hill",
-    "zone_type": "red"
+    "zone_type": "yellow"
   },
   {
     "name": "Ferites-Ohohtum",

@@ -86,7 +86,7 @@ internal static class Args
 
 internal sealed class MapOverlayForm : Form
 {
-    private const int MinOverlayWidth = 260;
+    private const int MinOverlayWidth = 374;
     private const int MinOverlayHeight = 220;
     private const int MaxOverlayWidth = 800;
     private const int MaxOverlayHeight = 700;
@@ -103,6 +103,7 @@ internal sealed class MapOverlayForm : Form
     private Rectangle _dragStartBounds;
     private bool _draggingHeader;
     private bool _resizing;
+    private bool _boundsDirty;
     private readonly System.Windows.Forms.Timer _topmostTimer = new();
     private string _routeFromText = "";
     private string _routeToText = "";
@@ -117,6 +118,7 @@ internal sealed class MapOverlayForm : Form
         TopMost = true;
         StartPosition = FormStartPosition.Manual;
         DoubleBuffered = true;
+        ResizeRedraw = true;
         BackColor = Color.Fuchsia;
         TransparencyKey = Color.Fuchsia;
         Opacity = 0.78;
@@ -170,6 +172,7 @@ internal sealed class MapOverlayForm : Form
     {
         if (m.Msg == WmHotkey)
         {
+            Console.Error.WriteLine($"Hotkey pressed id={m.WParam.ToInt32()}");
             switch (m.WParam.ToInt32())
             {
                 case 1:
@@ -258,6 +261,12 @@ internal sealed class MapOverlayForm : Form
                     break;
                 case "hotkeys":
                     RegisterHotkeys(command);
+                    break;
+                case "capture_current":
+                    Program.WriteJson(new { @event = "capture_current" });
+                    break;
+                case "capture_portal":
+                    Program.WriteJson(new { @event = "capture_portal" });
                     break;
                 case "reset":
                     SetOverlayBounds(new OverlayBounds(80, 120, 360, 300));
@@ -456,6 +465,10 @@ internal sealed class MapOverlayForm : Form
             var error = Marshal.GetLastWin32Error();
             Program.WriteJson(new { @event = "hotkey_error", id, status = error });
             Console.Error.WriteLine($"RegisterHotKey failed id={id} key={key} modifiers={modifiers} error={error}");
+        }
+        else
+        {
+            Console.Error.WriteLine($"RegisterHotKey ok id={id} key={key} modifiers={modifiers} label={binding.Label}");
         }
     }
 
@@ -769,7 +782,7 @@ internal sealed class MapOverlayForm : Form
         {
             var delta = new Size(Cursor.Position.X - _dragStartCursor.X, Cursor.Position.Y - _dragStartCursor.Y);
             Bounds = new Rectangle(_dragStartBounds.Location + delta, _dragStartBounds.Size);
-            PersistBounds();
+            _boundsDirty = true;
         }
         else if (_resizing)
         {
@@ -779,16 +792,21 @@ internal sealed class MapOverlayForm : Form
                 _dragStartBounds.Y,
                 Math.Clamp(_dragStartBounds.Width + delta.Width, MinOverlayWidth, MaxOverlayWidth),
                 Math.Clamp(_dragStartBounds.Height + delta.Height, MinOverlayHeight, MaxOverlayHeight));
-            PersistBounds();
+            _boundsDirty = true;
         }
     }
 
     protected override void OnMouseUp(MouseEventArgs e)
     {
+        var changed = _boundsDirty;
         _draggingHeader = false;
         _resizing = false;
+        _boundsDirty = false;
         Cursor = Cursors.Default;
-        PersistBounds();
+        if (changed)
+        {
+            PersistBounds();
+        }
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -1195,13 +1213,21 @@ internal sealed record HotkeyBinding(int KeyCode, uint Modifiers, string Label)
         {
             result |= NativeMethods.MOD_SHIFT;
         }
-        if ((Modifiers & 0x0800) != 0 || Modifiers == 768 || Label.Contains("Alt", StringComparison.OrdinalIgnoreCase) || Label.Contains('⌥'))
+        if ((Modifiers & 0x0800) != 0 || Label.Contains("Alt", StringComparison.OrdinalIgnoreCase) || Label.Contains('⌥'))
         {
             result |= NativeMethods.MOD_ALT;
         }
         if ((Modifiers & 0x1000) != 0 || Label.Contains("Ctrl", StringComparison.OrdinalIgnoreCase) || Label.Contains('⌃'))
         {
             result |= NativeMethods.MOD_CONTROL;
+        }
+        if ((Modifiers & 0x0100) != 0 && (Label.Contains("Win", StringComparison.OrdinalIgnoreCase) || Label.Contains('⌘')))
+        {
+            result |= NativeMethods.MOD_WIN;
+        }
+        if (Modifiers == 768 && result == NativeMethods.MOD_SHIFT)
+        {
+            result |= NativeMethods.MOD_ALT;
         }
 
         return result;
@@ -1301,6 +1327,7 @@ internal static class NativeMethods
     internal const uint MOD_ALT = 0x0001;
     internal const uint MOD_CONTROL = 0x0002;
     internal const uint MOD_SHIFT = 0x0004;
+    internal const uint MOD_WIN = 0x0008;
     internal static readonly IntPtr HWND_TOPMOST = new(-1);
     internal const uint SWP_NOACTIVATE = 0x0010;
     internal const uint SWP_SHOWWINDOW = 0x0040;
