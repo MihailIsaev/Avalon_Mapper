@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
+    "windows:dev": "tools\\windows\\run-dev.cmd",
     "frontend:dev": "vite --host 127.0.0.1",
     "build": "tauri build",
     "web:build": "vite build",
