@@ -4,6 +4,7 @@ import type {
   DashboardData,
   Edge,
   GraphData,
+  HotkeySettings,
   Observation,
   OcrResult,
   MapOverlayBounds,

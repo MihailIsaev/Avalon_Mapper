@@ -161,6 +161,32 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    if (!hotkeys || recordingHotkey) return;
+
+    const handler = (event: KeyboardEvent) => {
+      const keyCode = keyCodeMap[event.code];
+      if (keyCode === undefined) return;
+
+      const modifiers = macCarbonModifiersFromKeyboardEvent(event);
+      const matches = (binding: HotkeyBinding) => binding.key_code === keyCode && binding.modifiers === modifiers;
+
+      if (matches(hotkeys.toggle_overlay)) {
+        event.preventDefault();
+        void runAction("Toggling map overlay", () => api.toggleMapOverlay());
+      } else if (matches(hotkeys.capture_current)) {
+        event.preventDefault();
+        void runAction("Capturing current location", () => api.captureCurrentLocation());
+      } else if (matches(hotkeys.capture_portal)) {
+        event.preventDefault();
+        void runAction("Capturing portal", () => api.capturePortalDestination());
+      }
+    };
+
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [hotkeys, recordingHotkey]);
+
   const normalizedCurrent = normalizeLocationName(manualCorrection || rawText);
   const normalizedPortal = normalizeLocationName(portalCorrection || portalText);
 
@@ -429,7 +455,6 @@ function GraphPage({ graph, currentLocation }: { graph: GraphData; currentLocati
         source: String(edge.from_location_id),
         target: String(edge.to_location_id),
         label: formatEdgeTimer(edge),
-        className: edge.source === "traversed" ? "traversed-edge" : `edge-${edge.status}`,
         className: edge.source === "traversed" ? "edge-traversed-light" : `edge-${edge.status}`,
         style: {
           stroke: edge.source === "traversed" ? "#fff3a7" : undefined,

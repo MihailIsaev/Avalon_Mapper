@@ -1770,6 +1770,8 @@ fn run_native_overlay(app: &AppHandle, mode: &str) -> Result<OverlaySelection, S
     }
 
     let helper = ensure_native_overlay_helper(app)?;
+    eprintln!("[overlay-helper] launching persistent map overlay {}", helper.display());
+    eprintln!("[overlay-helper] launching {}", helper.display());
     let output = Command::new(helper)
         .arg("--mode")
         .arg(mode)
@@ -1850,9 +1852,12 @@ fn ensure_map_overlay_running(app: &AppHandle, state: &AppState) -> Result<(), S
         .arg(&bounds_state_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|err| format!("Could not launch map overlay helper: {err}"))?;
+    if let Some(stderr) = child.stderr.take() {
+        spawn_stderr_forwarder("overlay-helper", stderr);
+    }
     let stdin = child
         .stdin
         .take()
@@ -2045,6 +2050,9 @@ fn spawn_map_overlay_stdout_reader(
                                 if enabled { "true" } else { "false" },
                             );
                         }
+                    }
+                    "hotkey_error" => {
+                        eprintln!("[overlay-hotkey] registration failed: {value}");
                     }
                     "capture_current" => {
                         let _ = handle_hotkey_capture(

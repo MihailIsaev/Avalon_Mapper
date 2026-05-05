@@ -10,6 +10,17 @@ export interface Region {
   anchor_y: number | null;
 }
 
+export interface HotkeyBinding {
+  key_code: number;
+  modifiers: number;
+  label: string;
+}
+
+export interface HotkeySettings {
+  toggle_overlay: HotkeyBinding;
+  capture_current: HotkeyBinding;
+  capture_portal: HotkeyBinding;
+}
 
 export interface Location {
   id: number;
