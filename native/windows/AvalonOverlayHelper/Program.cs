@@ -1,0 +1,1178 @@
+using System.Diagnostics;
+using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace AvalonOverlayHelper;
+
+internal static class Program
+{
+    internal static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        PropertyNameCaseInsensitive = true
+    };
+
+    [STAThread]
+    private static int Main(string[] args)
+    {
+        try
+        {
+            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+
+            var mode = Args.Value(args, "--mode") ?? "region";
+            switch (mode)
+            {
+                case "map-overlay":
+                    var overlay = new MapOverlayForm(Args.Value(args, "--bounds-state"));
+                    _ = overlay.Handle;
+                    Application.Run();
+                    return 0;
+                case "region":
+                case "portal-size":
+                case "diagnostic":
+                    Application.Run(new SelectionForm(mode));
+                    return 0;
+                case "capture-ocr":
+                    CaptureOcr.Run(args);
+                    return 0;
+                default:
+                    Console.Error.WriteLine($"Unknown mode: {mode}");
+                    return 2;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            return 1;
+        }
+    }
+
+    internal static void WriteJson<T>(T value)
+    {
+        Console.Out.WriteLine(JsonSerializer.Serialize(value, JsonOptions));
+        Console.Out.Flush();
+    }
+}
+
+internal static class Args
+{
+    internal static string? Value(string[] args, string name)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+        {
+            if (string.Equals(args[i], name, StringComparison.OrdinalIgnoreCase))
+            {
+                return args[i + 1];
+            }
+        }
+
+        return null;
+    }
+
+    internal static int IntValue(string[] args, string name, int fallback)
+    {
+        return int.TryParse(Value(args, name), out var value) ? value : fallback;
+    }
+
+    internal static double? DoubleValue(string[] args, string name)
+    {
+        return double.TryParse(Value(args, name), out var value) ? value : null;
+    }
+}
+
+internal sealed class MapOverlayForm : Form
+{
+    private const int MinOverlayWidth = 260;
+    private const int MinOverlayHeight = 220;
+    private const int MaxOverlayWidth = 800;
+    private const int MaxOverlayHeight = 700;
+    private const int WmHotkey = 0x0312;
+
+    private readonly string? _boundsStatePath;
+    private readonly object _dataLock = new();
+    private MapOverlayData _data = MapOverlayData.Empty;
+    private bool _interactive;
+    private bool _visible;
+    private int? _selectedLocationId;
+    private readonly List<(int Id, RectangleF Rect)> _nodeRects = [];
+    private Point _dragStartCursor;
+    private Rectangle _dragStartBounds;
+    private bool _draggingHeader;
+    private bool _resizing;
+    private readonly System.Windows.Forms.Timer _topmostTimer = new();
+
+    public MapOverlayForm(string? boundsStatePath)
+    {
+        _boundsStatePath = boundsStatePath;
+
+        FormBorderStyle = FormBorderStyle.None;
+        ShowInTaskbar = false;
+        TopMost = true;
+        StartPosition = FormStartPosition.Manual;
+        DoubleBuffered = true;
+        BackColor = Color.Magenta;
+        TransparencyKey = Color.Magenta;
+        Bounds = BoundsFromTopLeft(LoadBounds() ?? new OverlayBounds(80, 120, 360, 300));
+        Hide();
+        _visible = false;
+        _topmostTimer.Interval = 1000;
+        _topmostTimer.Tick += (_, _) => KeepTopmost();
+        _topmostTimer.Start();
+
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
+    }
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.ExStyle |= NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_TOPMOST | NativeMethods.WS_EX_NOACTIVATE | NativeMethods.WS_EX_LAYERED;
+            if (!_interactive)
+            {
+                cp.ExStyle |= NativeMethods.WS_EX_TRANSPARENT;
+            }
+
+            return cp;
+        }
+    }
+
+    protected override bool ShowWithoutActivation => true;
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        ApplyClickThrough();
+        RegisterHotkeys();
+        StartCommandReader();
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        _topmostTimer.Stop();
+        _topmostTimer.Dispose();
+        NativeMethods.UnregisterHotKey(Handle, 1);
+        NativeMethods.UnregisterHotKey(Handle, 2);
+        NativeMethods.UnregisterHotKey(Handle, 3);
+        base.OnFormClosed(e);
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == WmHotkey)
+        {
+            switch (m.WParam.ToInt32())
+            {
+                case 1:
+                    ToggleOverlay();
+                    break;
+                case 2:
+                    Program.WriteJson(new { @event = "capture_current" });
+                    break;
+                case 3:
+                    Program.WriteJson(new { @event = "capture_portal" });
+                    break;
+            }
+        }
+
+        base.WndProc(ref m);
+    }
+
+    private void StartCommandReader()
+    {
+        Task.Run(() =>
+        {
+            string? line;
+            while ((line = Console.In.ReadLine()) != null)
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(line);
+                    var command = doc.RootElement.Clone();
+                    if (!IsDisposed)
+                    {
+                        BeginInvoke((Action)(() => HandleCommand(command)));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Ignoring malformed overlay command: {ex.Message}");
+                }
+            }
+        });
+    }
+
+    private void HandleCommand(JsonElement command)
+    {
+        if (!command.TryGetProperty("type", out var typeElement))
+        {
+            return;
+        }
+
+        var type = typeElement.GetString();
+        try
+        {
+            switch (type)
+            {
+                case "show":
+                    ShowOverlay();
+                    break;
+                case "hide":
+                    HideOverlay();
+                    break;
+                case "toggle":
+                    ToggleOverlay();
+                    break;
+                case "interactive":
+                    SetInteractive(command.TryGetProperty("enabled", out var enabled) && enabled.GetBoolean());
+                    break;
+                case "bounds":
+                    if (command.TryGetProperty("bounds", out var boundsElement))
+                    {
+                        var bounds = boundsElement.Deserialize<OverlayBounds>(Program.JsonOptions);
+                        if (bounds is not null)
+                        {
+                            SetOverlayBounds(bounds);
+                        }
+                    }
+                    break;
+                case "data":
+                    if (command.TryGetProperty("data", out var dataElement))
+                    {
+                        lock (_dataLock)
+                        {
+                            _data = dataElement.Deserialize<MapOverlayData>(Program.JsonOptions) ?? MapOverlayData.Empty;
+                        }
+
+                        Invalidate();
+                    }
+                    break;
+                case "hotkeys":
+                    RegisterHotkeys(command);
+                    break;
+                case "reset":
+                    SetOverlayBounds(new OverlayBounds(80, 120, 360, 300));
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Overlay command failed ({type}): {ex.Message}");
+        }
+    }
+
+    private void ShowOverlay()
+    {
+        _visible = true;
+        Show();
+        NativeMethods.SetWindowPos(Handle, NativeMethods.HWND_TOPMOST, Left, Top, Width, Height, NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+        Program.WriteJson(new { @event = "visible", visible = true });
+    }
+
+    private void HideOverlay()
+    {
+        _visible = false;
+        Hide();
+        Program.WriteJson(new { @event = "visible", visible = false });
+    }
+
+    private void KeepTopmost()
+    {
+        if (_visible && IsHandleCreated)
+        {
+            NativeMethods.SetWindowPos(Handle, NativeMethods.HWND_TOPMOST, Left, Top, Width, Height, NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+        }
+    }
+
+    private void ToggleOverlay()
+    {
+        if (_visible)
+        {
+            HideOverlay();
+        }
+        else
+        {
+            ShowOverlay();
+        }
+    }
+
+    private void SetInteractive(bool enabled)
+    {
+        _interactive = enabled;
+        ApplyClickThrough();
+        Invalidate();
+        if (enabled && _visible)
+        {
+            NativeMethods.SetWindowPos(Handle, NativeMethods.HWND_TOPMOST, Left, Top, Width, Height, NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+        }
+
+        Program.WriteJson(new { @event = "interactive", enabled });
+    }
+
+    private void ApplyClickThrough()
+    {
+        if (!IsHandleCreated)
+        {
+            return;
+        }
+
+        var style = NativeMethods.GetWindowLongPtr(Handle, NativeMethods.GWL_EXSTYLE).ToInt64();
+        style |= NativeMethods.WS_EX_LAYERED | NativeMethods.WS_EX_TOPMOST | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE;
+        if (_interactive)
+        {
+            style &= ~NativeMethods.WS_EX_TRANSPARENT;
+        }
+        else
+        {
+            style |= NativeMethods.WS_EX_TRANSPARENT;
+        }
+
+        NativeMethods.SetWindowLongPtr(Handle, NativeMethods.GWL_EXSTYLE, new IntPtr(style));
+    }
+
+    private void SetOverlayBounds(OverlayBounds raw)
+    {
+        var bounds = Sanitize(raw);
+        Bounds = BoundsFromTopLeft(bounds);
+        PersistBounds();
+        Invalidate();
+    }
+
+    private static OverlayBounds Sanitize(OverlayBounds bounds)
+    {
+        return bounds with
+        {
+            Width = Math.Clamp(bounds.Width, MinOverlayWidth, MaxOverlayWidth),
+            Height = Math.Clamp(bounds.Height, MinOverlayHeight, MaxOverlayHeight)
+        };
+    }
+
+    private static Rectangle BoundsFromTopLeft(OverlayBounds bounds)
+    {
+        var screen = Screen.PrimaryScreen?.Bounds ?? new Rectangle(0, 0, 1440, 900);
+        return new Rectangle(screen.Left + bounds.X, screen.Top + bounds.Y, bounds.Width, bounds.Height);
+    }
+
+    private OverlayBounds TopLeftBounds()
+    {
+        var screen = Screen.PrimaryScreen?.Bounds ?? new Rectangle(0, 0, 1440, 900);
+        return new OverlayBounds(Left - screen.Left, Top - screen.Top, Width, Height);
+    }
+
+    private OverlayBounds? LoadBounds()
+    {
+        if (string.IsNullOrWhiteSpace(_boundsStatePath) || !File.Exists(_boundsStatePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<OverlayBounds>(File.ReadAllText(_boundsStatePath), Program.JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Could not load overlay bounds: {ex.Message}");
+            return null;
+        }
+    }
+
+    private void PersistBounds()
+    {
+        var bounds = TopLeftBounds();
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_boundsStatePath))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_boundsStatePath)!);
+                File.WriteAllText(_boundsStatePath, JsonSerializer.Serialize(bounds, Program.JsonOptions));
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Could not persist overlay bounds: {ex.Message}");
+        }
+
+        Program.WriteJson(new { @event = "bounds", bounds });
+    }
+
+    private void RegisterHotkeys(JsonElement? command = null)
+    {
+        NativeMethods.UnregisterHotKey(Handle, 1);
+        NativeMethods.UnregisterHotKey(Handle, 2);
+        NativeMethods.UnregisterHotKey(Handle, 3);
+
+        var toggle = HotkeyBinding.DefaultToggle;
+        var current = HotkeyBinding.DefaultCurrent;
+        var portal = HotkeyBinding.DefaultPortal;
+
+        if (command is { } root)
+        {
+            if (root.TryGetProperty("toggle_overlay", out var toggleElement))
+            {
+                toggle = toggleElement.Deserialize<HotkeyBinding>(Program.JsonOptions) ?? toggle;
+            }
+            if (root.TryGetProperty("capture_current", out var currentElement))
+            {
+                current = currentElement.Deserialize<HotkeyBinding>(Program.JsonOptions) ?? current;
+            }
+            if (root.TryGetProperty("capture_portal", out var portalElement))
+            {
+                portal = portalElement.Deserialize<HotkeyBinding>(Program.JsonOptions) ?? portal;
+            }
+        }
+
+        RegisterHotkey(1, toggle);
+        RegisterHotkey(2, current);
+        RegisterHotkey(3, portal);
+    }
+
+    private void RegisterHotkey(int id, HotkeyBinding binding)
+    {
+        var key = binding.ToWindowsKey();
+        var modifiers = binding.ToWindowsModifiers();
+        if (key == Keys.None)
+        {
+            Console.Error.WriteLine($"Skipping unsupported hotkey id={id} key_code={binding.KeyCode}");
+            return;
+        }
+
+        if (!NativeMethods.RegisterHotKey(Handle, id, modifiers, (uint)key))
+        {
+            var error = Marshal.GetLastWin32Error();
+            Program.WriteJson(new { @event = "hotkey_error", id, status = error });
+            Console.Error.WriteLine($"RegisterHotKey failed id={id} key={key} modifiers={modifiers} error={error}");
+        }
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.Clear(TransparencyKey);
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+        MapOverlayData data;
+        lock (_dataLock)
+        {
+            data = _data;
+        }
+
+        using var panelBrush = new SolidBrush(Color.FromArgb(_interactive ? 218 : 190, 14, 17, 24));
+        using var borderPen = new Pen(Color.FromArgb(_interactive ? 90 : 45, Color.White), 1f);
+        var panel = new RectangleF(0, 0, Math.Max(1, ClientRectangle.Width - 1), Math.Max(1, ClientRectangle.Height - 1));
+        e.Graphics.FillRoundedRectangle(panelBrush, panel, 8);
+        e.Graphics.DrawRoundedRectangle(borderPen, panel, 8);
+
+        DrawHeader(e.Graphics, data);
+        DrawGraph(e.Graphics, data, GraphRect());
+        DrawControls(e.Graphics, data);
+        if (_interactive)
+        {
+            DrawResizeHandle(e.Graphics);
+        }
+    }
+
+    private void DrawHeader(Graphics g, MapOverlayData data)
+    {
+        using var titleFont = new Font("Segoe UI", 10, FontStyle.Bold);
+        using var smallFont = new Font("Segoe UI", 8);
+        using var textBrush = new SolidBrush(Color.FromArgb(235, 245, 247, 250));
+        using var mutedBrush = new SolidBrush(Color.FromArgb(160, 245, 247, 250));
+        var title = SelectedLocationName(data) ?? data.CurrentLocation ?? "No location selected";
+        g.DrawString(TrimTo(title, 44), titleFont, textBrush, new PointF(14, 10));
+        var status = $"{data.LastCaptureStatus ?? "No captures yet"} | {data.KnownLocationsCount ?? data.Locations.Count} nodes | {data.KnownEdgesCount ?? data.Edges.Count} edges";
+        g.DrawString(TrimTo(status, 64), smallFont, mutedBrush, new PointF(14, 30));
+        if (!_interactive)
+        {
+            g.DrawString("click-through", smallFont, mutedBrush, new PointF(Math.Max(14, Width - 88), 12));
+        }
+    }
+
+    private void DrawGraph(Graphics g, MapOverlayData data, RectangleF rect)
+    {
+        using var graphBrush = new SolidBrush(Color.FromArgb(48, 0, 0, 0));
+        using var graphPen = new Pen(Color.FromArgb(35, Color.White), 1f);
+        g.FillRoundedRectangle(graphBrush, rect, 6);
+        g.DrawRoundedRectangle(graphPen, rect, 6);
+
+        var locations = data.Locations.Count > 0 ? data.Locations : data.RouteLocations;
+        _nodeRects.Clear();
+        if (locations.Count == 0)
+        {
+            using var font = new Font("Segoe UI", 9);
+            using var brush = new SolidBrush(Color.FromArgb(150, Color.White));
+            g.DrawString("Waiting for map data", font, brush, rect.Left + 12, rect.Top + 12);
+            return;
+        }
+
+        var points = LayoutLocations(locations, rect);
+        var routeEdgeIds = data.RouteEdges.Select(e => e.Id).ToHashSet();
+        var routePairs = data.RouteEdges.Select(e => PairKey(e.FromLocationId, e.ToLocationId)).ToHashSet();
+
+        foreach (var edge in data.Edges)
+        {
+            if (!points.TryGetValue(edge.FromLocationId, out var from) || !points.TryGetValue(edge.ToLocationId, out var to))
+            {
+                continue;
+            }
+
+            var highlighted = routeEdgeIds.Contains(edge.Id) || routePairs.Contains(PairKey(edge.FromLocationId, edge.ToLocationId));
+            using var pen = new Pen(highlighted ? Color.FromArgb(240, 250, 204, 21) : Color.FromArgb(85, 148, 163, 184), highlighted ? 3f : 1.25f);
+            g.DrawLine(pen, from, to);
+        }
+
+        foreach (var edge in data.RouteEdges)
+        {
+            if (!points.TryGetValue(edge.FromLocationId, out var from) || !points.TryGetValue(edge.ToLocationId, out var to))
+            {
+                continue;
+            }
+
+            using var pen = new Pen(Color.FromArgb(250, 250, 204, 21), 3f);
+            g.DrawLine(pen, from, to);
+        }
+
+        using var nameFont = new Font("Segoe UI", 7);
+        foreach (var location in locations)
+        {
+            if (!points.TryGetValue(location.Id, out var point))
+            {
+                continue;
+            }
+
+            var selected = _selectedLocationId == location.Id;
+            var radius = selected ? 6.5f : 5f;
+            var nodeRect = new RectangleF(point.X - radius, point.Y - radius, radius * 2, radius * 2);
+            _nodeRects.Add((location.Id, nodeRect));
+
+            using var fill = new SolidBrush(NodeColor(location, data.CurrentLocation));
+            using var outline = new Pen(selected ? Color.White : Color.FromArgb(210, 15, 23, 42), selected ? 2f : 1f);
+            g.FillEllipse(fill, nodeRect);
+            g.DrawEllipse(outline, nodeRect);
+
+            if (selected || string.Equals(location.Name, data.CurrentLocation, StringComparison.OrdinalIgnoreCase))
+            {
+                using var text = new SolidBrush(Color.FromArgb(230, Color.White));
+                g.DrawString(TrimTo(location.Name, 18), nameFont, text, point.X + 8, point.Y - 8);
+            }
+        }
+    }
+
+    private static Dictionary<int, PointF> LayoutLocations(IReadOnlyList<MapLocation> locations, RectangleF rect)
+    {
+        var withCoordinates = locations.Where(l => l.X.HasValue && l.Y.HasValue).ToList();
+        var points = new Dictionary<int, PointF>();
+        if (withCoordinates.Count >= Math.Max(2, locations.Count / 2))
+        {
+            var minX = withCoordinates.Min(l => l.X!.Value);
+            var maxX = withCoordinates.Max(l => l.X!.Value);
+            var minY = withCoordinates.Min(l => l.Y!.Value);
+            var maxY = withCoordinates.Max(l => l.Y!.Value);
+            var spanX = Math.Max(1, maxX - minX);
+            var spanY = Math.Max(1, maxY - minY);
+            foreach (var location in locations)
+            {
+                if (location.X.HasValue && location.Y.HasValue)
+                {
+                    var x = rect.Left + 18 + (float)((location.X.Value - minX) / spanX) * (rect.Width - 36);
+                    var y = rect.Top + 18 + (float)((location.Y.Value - minY) / spanY) * (rect.Height - 36);
+                    points[location.Id] = new PointF(x, y);
+                }
+            }
+        }
+
+        var missing = locations.Where(l => !points.ContainsKey(l.Id)).ToList();
+        for (var i = 0; i < missing.Count; i++)
+        {
+            var angle = Math.PI * 2 * i / Math.Max(1, missing.Count);
+            var radiusX = Math.Max(20, rect.Width / 2 - 26);
+            var radiusY = Math.Max(20, rect.Height / 2 - 26);
+            points[missing[i].Id] = new PointF(
+                rect.Left + rect.Width / 2 + (float)Math.Cos(angle) * radiusX,
+                rect.Top + rect.Height / 2 + (float)Math.Sin(angle) * radiusY);
+        }
+
+        return points;
+    }
+
+    private void DrawControls(Graphics g, MapOverlayData data)
+    {
+        using var smallFont = new Font("Segoe UI", 8, FontStyle.Bold);
+        DrawButton(g, FindButtonRect(), "Find", Color.FromArgb(95, 34, 197, 94), smallFont);
+        DrawButton(g, ClearButtonRect(), "Clear", Color.FromArgb(100, 239, 68, 68), smallFont);
+        DrawButton(g, CopyButtonRect(), "Copy", Color.FromArgb(95, 59, 130, 246), smallFont);
+
+        using var muted = new SolidBrush(Color.FromArgb(165, Color.White));
+        using var font = new Font("Segoe UI", 8);
+        var portal = data.LastPortalDestination is { Length: > 0 }
+            ? $"Last portal: {data.LastPortalDestination}"
+            : "Last portal: none";
+        g.DrawString(TrimTo(portal, 54), font, muted, new PointF(14, Height - 42));
+    }
+
+    private static void DrawButton(Graphics g, RectangleF rect, string text, Color color, Font font)
+    {
+        using var fill = new SolidBrush(color);
+        using var brush = new SolidBrush(Color.White);
+        g.FillRoundedRectangle(fill, rect, 5);
+        var size = g.MeasureString(text, font);
+        g.DrawString(text, font, brush, rect.Left + (rect.Width - size.Width) / 2, rect.Top + (rect.Height - size.Height) / 2 - 1);
+    }
+
+    private void DrawResizeHandle(Graphics g)
+    {
+        using var pen = new Pen(Color.FromArgb(120, Color.White), 1f);
+        var right = Width - 9;
+        var bottom = Height - 9;
+        g.DrawLine(pen, right - 14, bottom, right, bottom - 14);
+        g.DrawLine(pen, right - 8, bottom, right, bottom - 8);
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        if (!_interactive)
+        {
+            return;
+        }
+
+        if (Contains(FindButtonRect(), e.Location))
+        {
+            var data = _data;
+            Program.WriteJson(new { @event = "find_route", from = data.CurrentLocation ?? "", to = SelectedLocationName(data) ?? data.LastPortalDestination ?? "" });
+            return;
+        }
+
+        if (Contains(ClearButtonRect(), e.Location))
+        {
+            Program.WriteJson(new { @event = "clear_route" });
+            return;
+        }
+
+        if (Contains(CopyButtonRect(), e.Location))
+        {
+            CopyRouteToClipboard();
+            return;
+        }
+
+        var hit = _nodeRects.LastOrDefault(n => Contains(n.Rect, e.Location));
+        if (hit.Id != 0)
+        {
+            _selectedLocationId = hit.Id;
+            Invalidate();
+            return;
+        }
+
+        _dragStartCursor = Cursor.Position;
+        _dragStartBounds = Bounds;
+        if (Contains(ResizeHandleRect(), e.Location))
+        {
+            _resizing = true;
+        }
+        else if (Contains(HeaderRect(), e.Location))
+        {
+            _draggingHeader = true;
+        }
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        if (!_interactive)
+        {
+            return;
+        }
+
+        if (_draggingHeader)
+        {
+            var delta = new Size(Cursor.Position.X - _dragStartCursor.X, Cursor.Position.Y - _dragStartCursor.Y);
+            Bounds = new Rectangle(_dragStartBounds.Location + delta, _dragStartBounds.Size);
+            PersistBounds();
+        }
+        else if (_resizing)
+        {
+            var delta = new Size(Cursor.Position.X - _dragStartCursor.X, Cursor.Position.Y - _dragStartCursor.Y);
+            Bounds = new Rectangle(
+                _dragStartBounds.X,
+                _dragStartBounds.Y,
+                Math.Clamp(_dragStartBounds.Width + delta.Width, MinOverlayWidth, MaxOverlayWidth),
+                Math.Clamp(_dragStartBounds.Height + delta.Height, MinOverlayHeight, MaxOverlayHeight));
+            PersistBounds();
+        }
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        _draggingHeader = false;
+        _resizing = false;
+    }
+
+    private RectangleF HeaderRect() => new(0, 0, Width, 52);
+    private RectangleF GraphRect() => new(12, 56, Math.Max(20, Width - 24), Math.Max(40, Height - 118));
+    private RectangleF FindButtonRect() => new(14, Height - 27, 58, 22);
+    private RectangleF ClearButtonRect() => new(80, Height - 27, 58, 22);
+    private RectangleF CopyButtonRect() => new(146, Height - 27, 58, 22);
+    private RectangleF ResizeHandleRect() => new(Width - 28, Height - 28, 28, 28);
+
+    private static bool Contains(RectangleF rect, Point point) => rect.Contains(point.X, point.Y);
+
+    private string? SelectedLocationName(MapOverlayData data)
+    {
+        if (_selectedLocationId is not { } id)
+        {
+            return null;
+        }
+
+        return data.Locations.Concat(data.RouteLocations).Concat(data.BridgeLocations).FirstOrDefault(l => l.Id == id)?.Name;
+    }
+
+    private void CopyRouteToClipboard()
+    {
+        try
+        {
+            var data = _data;
+            var lines = data.RouteLocations.Select((location, index) => $"{index + 1}){location.Name}");
+            Clipboard.SetText(string.Join(Environment.NewLine, lines));
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Could not copy route: {ex.Message}");
+        }
+    }
+
+    private static string PairKey(int from, int to) => from <= to ? $"{from}:{to}" : $"{to}:{from}";
+
+    private static Color NodeColor(MapLocation location, string? currentLocation)
+    {
+        if (string.Equals(location.Name, currentLocation, StringComparison.OrdinalIgnoreCase))
+        {
+            return Color.FromArgb(34, 197, 94);
+        }
+
+        return location.ZoneType switch
+        {
+            "avalon" => Color.FromArgb(139, 92, 246),
+            "blue" or "yellow" => Color.FromArgb(59, 130, 246),
+            "red" => Color.FromArgb(239, 68, 68),
+            "outlands_black" => Color.FromArgb(25, 31, 42),
+            _ => Color.FromArgb(148, 163, 184)
+        };
+    }
+
+    private static string TrimTo(string value, int max)
+    {
+        return value.Length <= max ? value : value[..Math.Max(0, max - 1)] + "...";
+    }
+}
+
+internal sealed class SelectionForm : Form
+{
+    private readonly string _mode;
+    private Point _start;
+    private Point _current;
+    private Point _anchor;
+    private bool _dragging;
+
+    public SelectionForm(string mode)
+    {
+        _mode = mode;
+        FormBorderStyle = FormBorderStyle.None;
+        ShowInTaskbar = false;
+        TopMost = true;
+        StartPosition = FormStartPosition.Manual;
+        Bounds = SystemInformation.VirtualScreen;
+        BackColor = Color.Black;
+        Opacity = 0.28;
+        DoubleBuffered = true;
+        Cursor = Cursors.Cross;
+        KeyPreview = true;
+    }
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.ExStyle |= NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_TOPMOST;
+            return cp;
+        }
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        Activate();
+        NativeMethods.SetWindowPos(Handle, NativeMethods.HWND_TOPMOST, Left, Top, Width, Height, NativeMethods.SWP_SHOWWINDOW);
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        _dragging = true;
+        _start = PointToScreen(e.Location);
+        _current = _start;
+        _anchor = _start;
+        Invalidate();
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        if (!_dragging)
+        {
+            return;
+        }
+
+        _current = PointToScreen(e.Location);
+        Invalidate();
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        _dragging = false;
+        _current = PointToScreen(e.Location);
+        var rect = Normalized(_start, _current);
+        if (rect.Width < 4 || rect.Height < 4)
+        {
+            Finish(cancelled: true);
+            return;
+        }
+
+        var screen = Screen.FromPoint(new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2));
+        var displayId = (Array.IndexOf(Screen.AllScreens, screen) + 1).ToString();
+        var scale = DeviceDpi > 0 ? DeviceDpi / 96.0 : 1.0;
+        Program.WriteJson(new OverlaySelectionResult(
+            rect.X,
+            rect.Y,
+            rect.Width,
+            rect.Height,
+            displayId,
+            scale,
+            _mode == "portal-size" ? _anchor.X : null,
+            _mode == "portal-size" ? _anchor.Y : null,
+            false));
+        Close();
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.Escape)
+        {
+            Finish(cancelled: true);
+        }
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using var textBrush = new SolidBrush(Color.White);
+        using var font = new Font("Segoe UI", 12, FontStyle.Bold);
+        var message = _mode == "portal-size"
+            ? "Outline the portal tooltip plaque. Escape to cancel."
+            : "Drag to select capture region. Escape to cancel.";
+        e.Graphics.DrawString(message, font, textBrush, 20, 20);
+
+        var mouse = PointToClient(Cursor.Position);
+        using var crosshair = new Pen(Color.Gold, 1f);
+        e.Graphics.DrawLine(crosshair, mouse.X - 12, mouse.Y, mouse.X + 12, mouse.Y);
+        e.Graphics.DrawLine(crosshair, mouse.X, mouse.Y - 12, mouse.X, mouse.Y + 12);
+
+        if (!_dragging)
+        {
+            return;
+        }
+
+        var rect = Normalized(PointToClient(_start), PointToClient(_current));
+        using var fill = new SolidBrush(Color.FromArgb(55, 20, 184, 166));
+        using var pen = new Pen(Color.FromArgb(255, 45, 212, 191), 2f);
+        e.Graphics.FillRectangle(fill, rect);
+        e.Graphics.DrawRectangle(pen, rect);
+        e.Graphics.DrawString($"{rect.Width} x {rect.Height}", font, textBrush, rect.Left + 8, Math.Max(8, rect.Top + 8));
+    }
+
+    private void Finish(bool cancelled)
+    {
+        Program.WriteJson(new OverlaySelectionResult(0, 0, 0, 0, null, null, null, null, cancelled));
+        Close();
+    }
+
+    private static Rectangle Normalized(Point a, Point b)
+    {
+        return new Rectangle(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+    }
+}
+
+internal static class CaptureOcr
+{
+    internal static void Run(string[] args)
+    {
+        var started = Stopwatch.StartNew();
+        var kind = Args.Value(args, "--kind") ?? "capture";
+        var outputDir = Args.Value(args, "--output-dir") ?? Path.GetTempPath();
+        var width = Math.Max(1, Args.IntValue(args, "--width", 320));
+        var height = Math.Max(1, Args.IntValue(args, "--height", 180));
+
+        var rect = CaptureRect(args, width, height);
+        Directory.CreateDirectory(outputDir);
+
+        using var bitmap = new Bitmap(Math.Max(1, rect.Width), Math.Max(1, rect.Height));
+        using (var graphics = Graphics.FromImage(bitmap))
+        {
+            graphics.CopyFromScreen(rect.Left, rect.Top, 0, 0, rect.Size, CopyPixelOperation.SourceCopy);
+        }
+
+        var imagePath = Path.Combine(outputDir, $"{SanitizeFileName(kind)}-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.png");
+        bitmap.Save(imagePath, System.Drawing.Imaging.ImageFormat.Png);
+
+        Program.WriteJson(new CaptureOcrResult(
+            "",
+            null,
+            "capture_only",
+            imagePath,
+            bitmap.Width,
+            bitmap.Height,
+            started.ElapsedMilliseconds,
+            true,
+            []));
+    }
+
+    private static Rectangle CaptureRect(string[] args, int width, int height)
+    {
+        var portalX = Args.IntValue(args, "--portal-x", int.MinValue);
+        var portalY = Args.IntValue(args, "--portal-y", int.MinValue);
+        var portalWidth = Args.IntValue(args, "--portal-width", int.MinValue);
+        var portalHeight = Args.IntValue(args, "--portal-height", int.MinValue);
+        var portalAnchorX = Args.DoubleValue(args, "--portal-anchor-x");
+        var portalAnchorY = Args.DoubleValue(args, "--portal-anchor-y");
+
+        if (portalX != int.MinValue && portalY != int.MinValue && portalWidth > 0 && portalHeight > 0 && portalAnchorX.HasValue && portalAnchorY.HasValue)
+        {
+            var selected = new Rectangle(portalX, portalY, portalWidth, portalHeight);
+            var cursor = Cursor.Position;
+            var offsetX = selected.Left - (int)Math.Round(portalAnchorX.Value);
+            var offsetY = selected.Top - (int)Math.Round(portalAnchorY.Value);
+            var sameSide = new Rectangle(cursor.X + offsetX, cursor.Y + offsetY, selected.Width, selected.Height);
+            var mirrored = new Rectangle(cursor.X - (selected.Right - (int)Math.Round(portalAnchorX.Value)), cursor.Y + offsetY, selected.Width, selected.Height);
+            return Rectangle.Union(sameSide, mirrored);
+        }
+
+        if (args.Contains("--center-cursor"))
+        {
+            var cursor = Cursor.Position;
+            return new Rectangle(cursor.X - width / 2, cursor.Y - height / 2, width, height);
+        }
+
+        return new Rectangle(
+            Args.IntValue(args, "--x", 0),
+            Args.IntValue(args, "--y", 0),
+            width,
+            height);
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        foreach (var ch in Path.GetInvalidFileNameChars())
+        {
+            value = value.Replace(ch, '-');
+        }
+
+        return string.IsNullOrWhiteSpace(value) ? "capture" : value;
+    }
+}
+
+internal sealed record OverlayBounds(
+    [property: JsonPropertyName("x")] int X,
+    [property: JsonPropertyName("y")] int Y,
+    [property: JsonPropertyName("width")] int Width,
+    [property: JsonPropertyName("height")] int Height);
+
+internal sealed record OverlaySelectionResult(
+    int X,
+    int Y,
+    int Width,
+    int Height,
+    string? DisplayId,
+    double? ScaleFactor,
+    int? AnchorX,
+    int? AnchorY,
+    bool Cancelled);
+
+internal sealed record CaptureOcrResult(
+    string Text,
+    double? Confidence,
+    string Engine,
+    string ImagePath,
+    int Width,
+    int Height,
+    long DurationMs,
+    bool ScreenRecordingPermission,
+    IReadOnlyList<OcrLine> Lines);
+
+internal sealed record OcrLine(string Text, double? Confidence, OcrBbox? Bbox);
+internal sealed record OcrBbox(double X, double Y, double Width, double Height);
+
+internal sealed record HotkeyBinding(int KeyCode, uint Modifiers, string Label)
+{
+    internal static HotkeyBinding DefaultToggle => new(46, 768, "Alt+Shift+M");
+    internal static HotkeyBinding DefaultCurrent => new(37, 768, "Alt+Shift+L");
+    internal static HotkeyBinding DefaultPortal => new(35, 768, "Alt+Shift+P");
+
+    internal Keys ToWindowsKey()
+    {
+        return KeyCode switch
+        {
+            35 => Keys.P,
+            37 => Keys.L,
+            46 => Keys.M,
+            _ when Enum.IsDefined(typeof(Keys), KeyCode) => (Keys)KeyCode,
+            _ => Keys.None
+        };
+    }
+
+    internal uint ToWindowsModifiers()
+    {
+        uint result = 0;
+        if ((Modifiers & 0x0200) != 0 || Label.Contains("Shift", StringComparison.OrdinalIgnoreCase) || Label.Contains('⇧'))
+        {
+            result |= NativeMethods.MOD_SHIFT;
+        }
+        if ((Modifiers & 0x0800) != 0 || Modifiers == 768 || Label.Contains("Alt", StringComparison.OrdinalIgnoreCase) || Label.Contains('⌥'))
+        {
+            result |= NativeMethods.MOD_ALT;
+        }
+        if ((Modifiers & 0x1000) != 0 || Label.Contains("Ctrl", StringComparison.OrdinalIgnoreCase) || Label.Contains('⌃'))
+        {
+            result |= NativeMethods.MOD_CONTROL;
+        }
+
+        return result;
+    }
+}
+
+internal sealed class MapOverlayData
+{
+    public string? RouteExpiresAt { get; set; }
+    public int? RouteEdgesCount { get; set; }
+    public List<MapLocation> BridgeLocations { get; set; } = [];
+    public List<RouteOverlayEdge> BridgeEdges { get; set; } = [];
+    public string? CurrentLocation { get; set; }
+    public string? LastPortalDestination { get; set; }
+    public int? LastPortalExpiresInSeconds { get; set; }
+    public List<MapLocation> Locations { get; set; } = [];
+    public List<MapEdge> Edges { get; set; } = [];
+    public List<MapLocation> RouteLocations { get; set; } = [];
+    public List<RouteOverlayEdge> RouteEdges { get; set; } = [];
+    public string? LastCaptureStatus { get; set; } = "No captures yet";
+    public string? CaptureMode { get; set; }
+    public string? OcrMode { get; set; }
+    public string? DbStatus { get; set; }
+    public int? KnownLocationsCount { get; set; }
+    public int? KnownEdgesCount { get; set; }
+
+    public static MapOverlayData Empty => new();
+}
+
+internal sealed class MapLocation
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string? NormalizedName { get; set; }
+    public string? ZoneType { get; set; }
+    public double? X { get; set; }
+    public double? Y { get; set; }
+}
+
+internal sealed class MapEdge
+{
+    public int Id { get; set; }
+    public string? Source { get; set; }
+    public int FromLocationId { get; set; }
+    public int ToLocationId { get; set; }
+    public string FromLocationName { get; set; } = "";
+    public string ToLocationName { get; set; } = "";
+    public string? LastSeenAt { get; set; }
+    public string? Status { get; set; }
+}
+
+internal sealed class RouteOverlayEdge
+{
+    public int Id { get; set; }
+    public int FromLocationId { get; set; }
+    public int ToLocationId { get; set; }
+    public string FromLocationName { get; set; } = "";
+    public string ToLocationName { get; set; } = "";
+    public string? Source { get; set; }
+}
+
+internal static class GraphicsExtensions
+{
+    internal static void FillRoundedRectangle(this Graphics graphics, Brush brush, RectangleF bounds, float radius)
+    {
+        using var path = RoundedPath(bounds, radius);
+        graphics.FillPath(brush, path);
+    }
+
+    internal static void DrawRoundedRectangle(this Graphics graphics, Pen pen, RectangleF bounds, float radius)
+    {
+        using var path = RoundedPath(bounds, radius);
+        graphics.DrawPath(pen, path);
+    }
+
+    private static GraphicsPath RoundedPath(RectangleF bounds, float radius)
+    {
+        var diameter = radius * 2;
+        var path = new GraphicsPath();
+        path.AddArc(bounds.Left, bounds.Top, diameter, diameter, 180, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Top, diameter, diameter, 270, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+        path.AddArc(bounds.Left, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+        path.CloseFigure();
+        return path;
+    }
+}
+
+internal static class NativeMethods
+{
+    internal const int GWL_EXSTYLE = -20;
+    internal const long WS_EX_TRANSPARENT = 0x00000020L;
+    internal const long WS_EX_TOOLWINDOW = 0x00000080L;
+    internal const long WS_EX_TOPMOST = 0x00000008L;
+    internal const long WS_EX_LAYERED = 0x00080000L;
+    internal const long WS_EX_NOACTIVATE = 0x08000000L;
+    internal const uint MOD_ALT = 0x0001;
+    internal const uint MOD_CONTROL = 0x0002;
+    internal const uint MOD_SHIFT = 0x0004;
+    internal static readonly IntPtr HWND_TOPMOST = new(-1);
+    internal const uint SWP_NOACTIVATE = 0x0010;
+    internal const uint SWP_SHOWWINDOW = 0x0040;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
+    private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)]
+    private static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    internal static IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex)
+    {
+        return IntPtr.Size == 8 ? GetWindowLongPtr64(hWnd, nIndex) : new IntPtr(GetWindowLong32(hWnd, nIndex));
+    }
+
+    internal static IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong)
+    {
+        return IntPtr.Size == 8 ? SetWindowLongPtr64(hWnd, nIndex, dwNewLong) : new IntPtr(SetWindowLong32(hWnd, nIndex, dwNewLong.ToInt32()));
+    }
+}
