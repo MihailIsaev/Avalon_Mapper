@@ -119,8 +119,7 @@ internal sealed class MapOverlayForm : Form
         StartPosition = FormStartPosition.Manual;
         DoubleBuffered = true;
         ResizeRedraw = true;
-        BackColor = Color.Fuchsia;
-        TransparencyKey = Color.Fuchsia;
+        BackColor = Color.Black;
         Opacity = 0.78;
         KeyPreview = true;
         Bounds = BoundsFromTopLeft(LoadBounds() ?? new OverlayBounds(80, 120, 360, 300));
@@ -131,6 +130,7 @@ internal sealed class MapOverlayForm : Form
         _topmostTimer.Start();
 
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
+        UpdateWindowRegion();
     }
 
     protected override CreateParams CreateParams
@@ -166,6 +166,13 @@ internal sealed class MapOverlayForm : Form
         NativeMethods.UnregisterHotKey(Handle, 2);
         NativeMethods.UnregisterHotKey(Handle, 3);
         base.OnFormClosed(e);
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        UpdateWindowRegion();
+        ForceRedraw();
     }
 
     protected override void WndProc(ref Message m)
@@ -474,7 +481,7 @@ internal sealed class MapOverlayForm : Form
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        e.Graphics.Clear(TransparencyKey);
+        e.Graphics.Clear(Color.Black);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
         MapOverlayData data;
@@ -497,6 +504,36 @@ internal sealed class MapOverlayForm : Form
         {
             DrawResizeHandle(e.Graphics);
         }
+    }
+
+    private void UpdateWindowRegion()
+    {
+        if (Width <= 0 || Height <= 0)
+        {
+            return;
+        }
+
+        using var path = GraphicsExtensions.CreateRoundedPath(
+            new RectangleF(0, 0, Math.Max(1, Width), Math.Max(1, Height)),
+            8
+        );
+        Region?.Dispose();
+        Region = new Region(path);
+    }
+
+    private void ForceRedraw()
+    {
+        if (!IsHandleCreated)
+        {
+            return;
+        }
+
+        NativeMethods.RedrawWindow(
+            Handle,
+            IntPtr.Zero,
+            IntPtr.Zero,
+            NativeMethods.RDW_INVALIDATE | NativeMethods.RDW_ERASE | NativeMethods.RDW_UPDATENOW | NativeMethods.RDW_ALLCHILDREN
+        );
     }
 
     private void DrawHeader(Graphics g, MapOverlayData data)
@@ -783,6 +820,7 @@ internal sealed class MapOverlayForm : Form
             var delta = new Size(Cursor.Position.X - _dragStartCursor.X, Cursor.Position.Y - _dragStartCursor.Y);
             Bounds = new Rectangle(_dragStartBounds.Location + delta, _dragStartBounds.Size);
             _boundsDirty = true;
+            ForceRedraw();
         }
         else if (_resizing)
         {
@@ -793,6 +831,7 @@ internal sealed class MapOverlayForm : Form
                 Math.Clamp(_dragStartBounds.Width + delta.Width, MinOverlayWidth, MaxOverlayWidth),
                 Math.Clamp(_dragStartBounds.Height + delta.Height, MinOverlayHeight, MaxOverlayHeight));
             _boundsDirty = true;
+            ForceRedraw();
         }
     }
 
@@ -1338,17 +1377,17 @@ internal static class GraphicsExtensions
 {
     internal static void FillRoundedRectangle(this Graphics graphics, Brush brush, RectangleF bounds, float radius)
     {
-        using var path = RoundedPath(bounds, radius);
+        using var path = CreateRoundedPath(bounds, radius);
         graphics.FillPath(brush, path);
     }
 
     internal static void DrawRoundedRectangle(this Graphics graphics, Pen pen, RectangleF bounds, float radius)
     {
-        using var path = RoundedPath(bounds, radius);
+        using var path = CreateRoundedPath(bounds, radius);
         graphics.DrawPath(pen, path);
     }
 
-    private static GraphicsPath RoundedPath(RectangleF bounds, float radius)
+    internal static GraphicsPath CreateRoundedPath(RectangleF bounds, float radius)
     {
         var diameter = radius * 2;
         var path = new GraphicsPath();
@@ -1376,6 +1415,10 @@ internal static class NativeMethods
     internal static readonly IntPtr HWND_TOPMOST = new(-1);
     internal const uint SWP_NOACTIVATE = 0x0010;
     internal const uint SWP_SHOWWINDOW = 0x0040;
+    internal const uint RDW_INVALIDATE = 0x0001;
+    internal const uint RDW_ERASE = 0x0004;
+    internal const uint RDW_UPDATENOW = 0x0100;
+    internal const uint RDW_ALLCHILDREN = 0x0080;
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -1385,6 +1428,9 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
     private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
