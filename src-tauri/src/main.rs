@@ -714,13 +714,9 @@ fn read_hotkey_binding(
     key: &str,
     fallback: HotkeyBinding,
 ) -> Result<HotkeyBinding, String> {
-    let binding = get_setting(conn, key)?
+    Ok(get_setting(conn, key)?
         .and_then(|raw| serde_json::from_str::<HotkeyBinding>(&raw).ok())
-        .unwrap_or_else(|| fallback.clone());
-    if cfg!(target_os = "windows") && binding.modifiers == 0 {
-        return Ok(fallback);
-    }
-    Ok(binding)
+        .unwrap_or(fallback))
 }
 
 fn default_toggle_overlay_hotkey() -> HotkeyBinding {
@@ -3254,8 +3250,13 @@ fn ensure_paddle_ocr_process(
         windows_python_path
     } else if unix_python_path.exists() {
         unix_python_path
+    } else if cfg!(target_os = "windows") {
+        return Err(format!(
+            "Python OCR environment is missing: {}. Run tools\\windows\\run-dev.cmd so it creates .venv and installs paddleocr.",
+            windows_python_path.display()
+        ));
     } else {
-        PathBuf::from(if cfg!(target_os = "windows") { "python" } else { "python3" })
+        PathBuf::from("python3")
     };
 
     eprintln!("[paddleocr] starting worker python={} helper={}", python.display(), helper_path.display());
