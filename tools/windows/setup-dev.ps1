@@ -195,6 +195,69 @@ function Stop-Port1420 {
     }
 }
 
+function Ensure-TauriWindowsIcon {
+    $icoPath = Join-Path $repoRoot "src-tauri\icons\icon.ico"
+    $pngPath = Join-Path $repoRoot "src-tauri\icons\icon.png"
+    if (Test-Path $icoPath) {
+        return
+    }
+    if (-not (Test-Path $pngPath)) {
+        throw "Missing Tauri icon sources: $icoPath and $pngPath"
+    }
+
+    Write-Step "Generating Windows icon"
+    Add-Type -AssemblyName System.Drawing
+    $source = [System.Drawing.Bitmap]::FromFile($pngPath)
+    try {
+        $size = 256
+        $bitmap = New-Object System.Drawing.Bitmap $size, $size
+        $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+        try {
+            $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+            $graphics.Clear([System.Drawing.Color]::Transparent)
+            $graphics.DrawImage($source, 0, 0, $size, $size)
+        }
+        finally {
+            $graphics.Dispose()
+        }
+
+        $pngStream = New-Object System.IO.MemoryStream
+        try {
+            $bitmap.Save($pngStream, [System.Drawing.Imaging.ImageFormat]::Png)
+            $pngBytes = $pngStream.ToArray()
+        }
+        finally {
+            $pngStream.Dispose()
+            $bitmap.Dispose()
+        }
+
+        $icoStream = [System.IO.File]::Create($icoPath)
+        $writer = New-Object System.IO.BinaryWriter $icoStream
+        try {
+            $writer.Write([UInt16]0)
+            $writer.Write([UInt16]1)
+            $writer.Write([UInt16]1)
+            $writer.Write([Byte]0)
+            $writer.Write([Byte]0)
+            $writer.Write([Byte]0)
+            $writer.Write([Byte]0)
+            $writer.Write([UInt16]1)
+            $writer.Write([UInt16]32)
+            $writer.Write([UInt32]$pngBytes.Length)
+            $writer.Write([UInt32]22)
+            $writer.Write($pngBytes)
+        }
+        finally {
+            $writer.Dispose()
+            $icoStream.Dispose()
+        }
+    }
+    finally {
+        $source.Dispose()
+    }
+}
+
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $repoRoot
 $hostArch = Get-HostArch
@@ -205,6 +268,7 @@ Ensure-Node
 Ensure-Dotnet
 Ensure-Rust $hostArch
 $devCmd = Ensure-BuildTools
+Ensure-TauriWindowsIcon
 
 Write-Step "Tool versions"
 & node --version
