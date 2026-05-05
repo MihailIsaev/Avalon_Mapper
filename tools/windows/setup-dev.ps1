@@ -34,7 +34,7 @@ function Test-PythonImport($PythonExe, $ModuleName) {
     try {
         $process = Start-Process `
             -FilePath $PythonExe `
-            -ArgumentList @("-c", "import $ModuleName") `
+            -ArgumentList "-c `"import $ModuleName`"" `
             -NoNewWindow `
             -Wait `
             -PassThru `
