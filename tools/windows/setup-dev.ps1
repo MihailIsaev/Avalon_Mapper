@@ -4,6 +4,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
 
 function Write-Step($Message) {
     Write-Host ""
@@ -22,6 +25,11 @@ function Add-PathForProcess($PathValue) {
 
 function Has-Command($Name) {
     return $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
+}
+
+function Test-PythonImport($PythonExe, $ModuleName) {
+    & $PythonExe -c "import $ModuleName" *> $null
+    return $LASTEXITCODE -eq 0
 }
 
 function Get-HostArch {
@@ -110,8 +118,7 @@ function Ensure-PythonOcr {
         }
     }
 
-    & $venvPython -c "import paddleocr" 2>$null
-    if ($LASTEXITCODE -ne 0) {
+    if (-not (Test-PythonImport $venvPython "paddleocr")) {
         Write-Step "Installing Python OCR dependencies"
         & $venvPython -m pip install --upgrade pip
         if ($LASTEXITCODE -ne 0) {
@@ -121,8 +128,7 @@ function Ensure-PythonOcr {
         if ($LASTEXITCODE -ne 0) {
             throw "Could not install paddleocr in OCR virtualenv"
         }
-        & $venvPython -c "import paddleocr"
-        if ($LASTEXITCODE -ne 0) {
+        if (-not (Test-PythonImport $venvPython "paddleocr")) {
             throw "paddleocr was installed but cannot be imported from $venvPython"
         }
     } else {
