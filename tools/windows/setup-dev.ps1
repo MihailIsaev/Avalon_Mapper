@@ -30,6 +30,7 @@ function Has-Command($Name) {
 function Test-PythonImport($PythonExe, $ModuleName) {
     $stdoutPath = [System.IO.Path]::GetTempFileName()
     $stderrPath = [System.IO.Path]::GetTempFileName()
+    $script:LastPythonImportError = ""
     try {
         $process = Start-Process `
             -FilePath $PythonExe `
@@ -39,6 +40,9 @@ function Test-PythonImport($PythonExe, $ModuleName) {
             -PassThru `
             -RedirectStandardOutput $stdoutPath `
             -RedirectStandardError $stderrPath
+        $stdout = Get-Content $stdoutPath -Raw -ErrorAction SilentlyContinue
+        $stderr = Get-Content $stderrPath -Raw -ErrorAction SilentlyContinue
+        $script:LastPythonImportError = (($stdout, $stderr) -join "`n").Trim()
         return $process.ExitCode -eq 0
     } finally {
         Remove-Item $stdoutPath -Force -ErrorAction SilentlyContinue
@@ -132,17 +136,36 @@ function Ensure-PythonOcr {
         }
     }
 
-    if (-not (Test-PythonImport $venvPython "paddleocr")) {
-        Write-Step "Installing Python OCR dependencies"
+    if (-not (Test-PythonImport $venvPython "paddle")) {
+        Write-Step "Installing PaddlePaddle CPU runtime"
         & $venvPython -m pip install --upgrade pip
         if ($LASTEXITCODE -ne 0) {
             throw "Could not upgrade pip in OCR virtualenv"
         }
+        & $venvPython -m pip install paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not install paddlepaddle in OCR virtualenv"
+        }
+        if (-not (Test-PythonImport $venvPython "paddle")) {
+            if (-not [string]::IsNullOrWhiteSpace($script:LastPythonImportError)) {
+                Write-Host $script:LastPythonImportError -ForegroundColor Red
+            }
+            throw "paddlepaddle was installed but cannot be imported from $venvPython"
+        }
+    } else {
+        Write-Host "PaddlePaddle runtime already installed"
+    }
+
+    if (-not (Test-PythonImport $venvPython "paddleocr")) {
+        Write-Step "Installing Python OCR dependencies"
         & $venvPython -m pip install paddleocr
         if ($LASTEXITCODE -ne 0) {
             throw "Could not install paddleocr in OCR virtualenv"
         }
         if (-not (Test-PythonImport $venvPython "paddleocr")) {
+            if (-not [string]::IsNullOrWhiteSpace($script:LastPythonImportError)) {
+                Write-Host $script:LastPythonImportError -ForegroundColor Red
+            }
             throw "paddleocr was installed but cannot be imported from $venvPython"
         }
     } else {
