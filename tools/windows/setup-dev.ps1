@@ -28,8 +28,22 @@ function Has-Command($Name) {
 }
 
 function Test-PythonImport($PythonExe, $ModuleName) {
-    & $PythonExe -c "import $ModuleName" *> $null
-    return $LASTEXITCODE -eq 0
+    $stdoutPath = [System.IO.Path]::GetTempFileName()
+    $stderrPath = [System.IO.Path]::GetTempFileName()
+    try {
+        $process = Start-Process `
+            -FilePath $PythonExe `
+            -ArgumentList @("-c", "import $ModuleName") `
+            -NoNewWindow `
+            -Wait `
+            -PassThru `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+        return $process.ExitCode -eq 0
+    } finally {
+        Remove-Item $stdoutPath -Force -ErrorAction SilentlyContinue
+        Remove-Item $stderrPath -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Get-HostArch {
