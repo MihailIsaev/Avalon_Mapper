@@ -1133,11 +1133,11 @@ internal static class GraphicsExtensions
 internal static class NativeMethods
 {
     internal const int GWL_EXSTYLE = -20;
-    internal const long WS_EX_TRANSPARENT = 0x00000020L;
-    internal const long WS_EX_TOOLWINDOW = 0x00000080L;
-    internal const long WS_EX_TOPMOST = 0x00000008L;
-    internal const long WS_EX_LAYERED = 0x00080000L;
-    internal const long WS_EX_NOACTIVATE = 0x08000000L;
+    internal const int WS_EX_TRANSPARENT = 0x00000020;
+    internal const int WS_EX_TOOLWINDOW = 0x00000080;
+    internal const int WS_EX_TOPMOST = 0x00000008;
+    internal const int WS_EX_LAYERED = 0x00080000;
+    internal const int WS_EX_NOACTIVATE = 0x08000000;
     internal const uint MOD_ALT = 0x0001;
     internal const uint MOD_CONTROL = 0x0002;
     internal const uint MOD_SHIFT = 0x0004;
