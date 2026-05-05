@@ -104,6 +104,9 @@ internal sealed class MapOverlayForm : Form
     private bool _draggingHeader;
     private bool _resizing;
     private readonly System.Windows.Forms.Timer _topmostTimer = new();
+    private string _routeFromText = "";
+    private string _routeToText = "";
+    private RouteField? _activeRouteField;
 
     public MapOverlayForm(string? boundsStatePath)
     {
@@ -114,8 +117,10 @@ internal sealed class MapOverlayForm : Form
         TopMost = true;
         StartPosition = FormStartPosition.Manual;
         DoubleBuffered = true;
-        BackColor = Color.Magenta;
-        TransparencyKey = Color.Magenta;
+        BackColor = Color.Fuchsia;
+        TransparencyKey = Color.Fuchsia;
+        Opacity = 0.78;
+        KeyPreview = true;
         Bounds = BoundsFromTopLeft(LoadBounds() ?? new OverlayBounds(80, 120, 360, 300));
         Hide();
         _visible = false;
@@ -141,7 +146,7 @@ internal sealed class MapOverlayForm : Form
         }
     }
 
-    protected override bool ShowWithoutActivation => true;
+    protected override bool ShowWithoutActivation => !_interactive;
 
     protected override void OnHandleCreated(EventArgs e)
     {
@@ -303,11 +308,14 @@ internal sealed class MapOverlayForm : Form
     private void SetInteractive(bool enabled)
     {
         _interactive = enabled;
+        Opacity = enabled ? 0.86 : 0.78;
         ApplyClickThrough();
         Invalidate();
         if (enabled && _visible)
         {
             NativeMethods.SetWindowPos(Handle, NativeMethods.HWND_TOPMOST, Left, Top, Width, Height, NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+            Activate();
+            Focus();
         }
 
         Program.WriteJson(new { @event = "interactive", enabled });
@@ -321,14 +329,16 @@ internal sealed class MapOverlayForm : Form
         }
 
         var style = NativeMethods.GetWindowLongPtr(Handle, NativeMethods.GWL_EXSTYLE).ToInt64();
-        style |= NativeMethods.WS_EX_LAYERED | NativeMethods.WS_EX_TOPMOST | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE;
+        style |= NativeMethods.WS_EX_LAYERED | NativeMethods.WS_EX_TOPMOST | NativeMethods.WS_EX_TOOLWINDOW;
         if (_interactive)
         {
             style &= ~NativeMethods.WS_EX_TRANSPARENT;
+            style &= ~NativeMethods.WS_EX_NOACTIVATE;
         }
         else
         {
             style |= NativeMethods.WS_EX_TRANSPARENT;
+            style |= NativeMethods.WS_EX_NOACTIVATE;
         }
 
         NativeMethods.SetWindowLongPtr(Handle, NativeMethods.GWL_EXSTYLE, new IntPtr(style));
@@ -460,7 +470,7 @@ internal sealed class MapOverlayForm : Form
             data = _data;
         }
 
-        using var panelBrush = new SolidBrush(Color.FromArgb(_interactive ? 218 : 190, 14, 17, 24));
+        using var panelBrush = new SolidBrush(Color.FromArgb(15, 15, 15));
         using var borderPen = new Pen(Color.FromArgb(_interactive ? 90 : 45, Color.White), 1f);
         var panel = new RectangleF(0, 0, Math.Max(1, ClientRectangle.Width - 1), Math.Max(1, ClientRectangle.Height - 1));
         e.Graphics.FillRoundedRectangle(panelBrush, panel, 8);
@@ -468,6 +478,7 @@ internal sealed class MapOverlayForm : Form
 
         DrawHeader(e.Graphics, data);
         DrawGraph(e.Graphics, data, GraphRect());
+        DrawLastPortal(e.Graphics, data);
         DrawControls(e.Graphics, data);
         if (_interactive)
         {
@@ -489,11 +500,17 @@ internal sealed class MapOverlayForm : Form
         {
             g.DrawString("click-through", smallFont, mutedBrush, new PointF(Math.Max(14, Width - 88), 12));
         }
+        else
+        {
+            DrawButton(g, PassClicksButtonRect(), "Pass clicks", Color.FromArgb(32, 118, 118), smallFont);
+        }
+
+        DrawButton(g, UndoButtonRect(), "Undo", Color.FromArgb(205, 126, 32), smallFont);
     }
 
     private void DrawGraph(Graphics g, MapOverlayData data, RectangleF rect)
     {
-        using var graphBrush = new SolidBrush(Color.FromArgb(48, 0, 0, 0));
+        using var graphBrush = new SolidBrush(Color.FromArgb(10, 10, 10));
         using var graphPen = new Pen(Color.FromArgb(35, Color.White), 1f);
         g.FillRoundedRectangle(graphBrush, rect, 6);
         g.DrawRoundedRectangle(graphPen, rect, 6);
@@ -600,17 +617,37 @@ internal sealed class MapOverlayForm : Form
 
     private void DrawControls(Graphics g, MapOverlayData data)
     {
+        using var tinyFont = new Font("Segoe UI", 7, FontStyle.Regular);
         using var smallFont = new Font("Segoe UI", 8, FontStyle.Bold);
+        DrawInputBox(g, RouteFromRect(), string.IsNullOrWhiteSpace(_routeFromText) ? "from=current" : _routeFromText, _activeRouteField == RouteField.From, tinyFont);
+        DrawInputBox(g, RouteToRect(), string.IsNullOrWhiteSpace(_routeToText) ? "to" : _routeToText, _activeRouteField == RouteField.To, tinyFont);
         DrawButton(g, FindButtonRect(), "Find", Color.FromArgb(95, 34, 197, 94), smallFont);
-        DrawButton(g, ClearButtonRect(), "Clear", Color.FromArgb(100, 239, 68, 68), smallFont);
+        DrawButton(g, DelRoutesButtonRect(), "DelRoutes", Color.FromArgb(100, 239, 68, 68), tinyFont);
         DrawButton(g, CopyButtonRect(), "Copy", Color.FromArgb(95, 59, 130, 246), smallFont);
+        using var routeCountBrush = new SolidBrush(Color.FromArgb(165, Color.White));
+        g.DrawString($"{data.RouteEdgesCount ?? data.RouteEdges.Count}", smallFont, routeCountBrush, RouteCountRect().Left + 10, RouteCountRect().Top + 4);
+    }
 
+    private void DrawLastPortal(Graphics g, MapOverlayData data)
+    {
         using var muted = new SolidBrush(Color.FromArgb(165, Color.White));
         using var font = new Font("Segoe UI", 8);
         var portal = data.LastPortalDestination is { Length: > 0 }
             ? $"Last portal: {data.LastPortalDestination}"
             : "Last portal: none";
-        g.DrawString(TrimTo(portal, 54), font, muted, new PointF(14, Height - 42));
+        g.DrawString(TrimTo(portal, 54), font, muted, new PointF(14, Height - 66));
+    }
+
+    private static void DrawInputBox(Graphics g, RectangleF rect, string text, bool active, Font font)
+    {
+        using var fill = new SolidBrush(Color.FromArgb(35, 35, 35));
+        using var border = new Pen(active ? Color.FromArgb(230, 250, 204, 21) : Color.FromArgb(65, Color.White), active ? 1.5f : 1f);
+        using var brush = new SolidBrush(Color.FromArgb(180, Color.White));
+        g.FillRoundedRectangle(fill, rect, 5);
+        g.DrawRoundedRectangle(border, rect, 5);
+        g.SetClip(new RectangleF(rect.Left + 7, rect.Top + 3, rect.Width - 14, rect.Height - 6));
+        g.DrawString(text, font, brush, rect.Left + 7, rect.Top + 5);
+        g.ResetClip();
     }
 
     private static void DrawButton(Graphics g, RectangleF rect, string text, Color color, Font font)
@@ -638,15 +675,38 @@ internal sealed class MapOverlayForm : Form
             return;
         }
 
-        if (Contains(FindButtonRect(), e.Location))
+        Focus();
+
+        if (Contains(RouteFromRect(), e.Location))
         {
-            var data = _data;
-            Program.WriteJson(new { @event = "find_route", from = data.CurrentLocation ?? "", to = SelectedLocationName(data) ?? data.LastPortalDestination ?? "" });
+            _activeRouteField = RouteField.From;
+            Invalidate();
             return;
         }
 
-        if (Contains(ClearButtonRect(), e.Location))
+        if (Contains(RouteToRect(), e.Location))
         {
+            _activeRouteField = RouteField.To;
+            Invalidate();
+            return;
+        }
+
+        if (Contains(FindButtonRect(), e.Location))
+        {
+            var data = _data;
+            var from = _routeFromText.Trim();
+            var to = _routeToText.Trim();
+            if (string.IsNullOrWhiteSpace(to))
+            {
+                to = SelectedLocationName(data) ?? "";
+            }
+            Program.WriteJson(new { @event = "find_route", from, to });
+            return;
+        }
+
+        if (Contains(DelRoutesButtonRect(), e.Location))
+        {
+            _activeRouteField = null;
             Program.WriteJson(new { @event = "clear_route" });
             return;
         }
@@ -654,6 +714,18 @@ internal sealed class MapOverlayForm : Form
         if (Contains(CopyButtonRect(), e.Location))
         {
             CopyRouteToClipboard();
+            return;
+        }
+
+        if (Contains(UndoButtonRect(), e.Location))
+        {
+            Program.WriteJson(new { @event = "undo_last_action" });
+            return;
+        }
+
+        if (Contains(PassClicksButtonRect(), e.Location))
+        {
+            SetInteractive(false);
             return;
         }
 
@@ -670,10 +742,12 @@ internal sealed class MapOverlayForm : Form
         if (Contains(ResizeHandleRect(), e.Location))
         {
             _resizing = true;
+            Cursor = Cursors.SizeNWSE;
         }
         else if (Contains(HeaderRect(), e.Location))
         {
             _draggingHeader = true;
+            Cursor = Cursors.SizeAll;
         }
     }
 
@@ -682,6 +756,13 @@ internal sealed class MapOverlayForm : Form
         if (!_interactive)
         {
             return;
+        }
+
+        if (!_draggingHeader && !_resizing)
+        {
+            Cursor = Contains(ResizeHandleRect(), e.Location)
+                ? Cursors.SizeNWSE
+                : Contains(HeaderRect(), e.Location) ? Cursors.SizeAll : Cursors.Default;
         }
 
         if (_draggingHeader)
@@ -706,13 +787,86 @@ internal sealed class MapOverlayForm : Form
     {
         _draggingHeader = false;
         _resizing = false;
+        Cursor = Cursors.Default;
+        PersistBounds();
     }
 
-    private RectangleF HeaderRect() => new(0, 0, Width, 52);
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (!_interactive || _activeRouteField is null)
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
+        if (e.KeyCode == Keys.Escape)
+        {
+            _activeRouteField = null;
+            Invalidate();
+            return;
+        }
+
+        if (e.KeyCode == Keys.Enter)
+        {
+            var data = _data;
+            var to = _routeToText.Trim();
+            if (string.IsNullOrWhiteSpace(to))
+            {
+                to = SelectedLocationName(data) ?? "";
+            }
+            Program.WriteJson(new { @event = "find_route", from = _routeFromText.Trim(), to });
+            _activeRouteField = null;
+            Invalidate();
+            return;
+        }
+
+        if (e.KeyCode == Keys.Back)
+        {
+            if (_activeRouteField == RouteField.From && _routeFromText.Length > 0)
+            {
+                _routeFromText = _routeFromText[..^1];
+            }
+            else if (_activeRouteField == RouteField.To && _routeToText.Length > 0)
+            {
+                _routeToText = _routeToText[..^1];
+            }
+            Invalidate();
+            return;
+        }
+
+        base.OnKeyDown(e);
+    }
+
+    protected override void OnKeyPress(KeyPressEventArgs e)
+    {
+        if (!_interactive || _activeRouteField is null || char.IsControl(e.KeyChar))
+        {
+            base.OnKeyPress(e);
+            return;
+        }
+
+        if (_activeRouteField == RouteField.From)
+        {
+            _routeFromText += e.KeyChar;
+        }
+        else
+        {
+            _routeToText += e.KeyChar;
+        }
+        Invalidate();
+        e.Handled = true;
+    }
+
+    private RectangleF HeaderRect() => new(0, 0, Width, 44);
     private RectangleF GraphRect() => new(12, 56, Math.Max(20, Width - 24), Math.Max(40, Height - 118));
-    private RectangleF FindButtonRect() => new(14, Height - 27, 58, 22);
-    private RectangleF ClearButtonRect() => new(80, Height - 27, 58, 22);
-    private RectangleF CopyButtonRect() => new(146, Height - 27, 58, 22);
+    private RectangleF RouteFromRect() => new(14, Height - 54, 105, 24);
+    private RectangleF RouteToRect() => new(124, Height - 54, 105, 24);
+    private RectangleF FindButtonRect() => new(234, Height - 54, 48, 24);
+    private RectangleF DelRoutesButtonRect() => new(288, Height - 54, 72, 24);
+    private RectangleF CopyButtonRect() => new(234, Height - 24, 48, 22);
+    private RectangleF RouteCountRect() => new(288, Height - 24, 72, 22);
+    private RectangleF UndoButtonRect() => new(Math.Max(14, Width - 62), 7, 48, 24);
+    private RectangleF PassClicksButtonRect() => new(Math.Max(14, Width - 156), 7, 88, 24);
     private RectangleF ResizeHandleRect() => new(Width - 28, Height - 28, 28, 28);
 
     private static bool Contains(RectangleF rect, Point point) => rect.Contains(point.X, point.Y);
@@ -763,6 +917,12 @@ internal sealed class MapOverlayForm : Form
     private static string TrimTo(string value, int max)
     {
         return value.Length <= max ? value : value[..Math.Max(0, max - 1)] + "...";
+    }
+
+    private enum RouteField
+    {
+        From,
+        To
     }
 }
 

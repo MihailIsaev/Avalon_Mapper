@@ -639,7 +639,7 @@ function Diagnostics({
               : "Exclusive fullscreen cannot be overlaid reliably. Use Borderless Window / Windowed Fullscreen."
           }
         />
-        <Readout label="Borderless/windowed fullscreen" value="Targeted by the native macOS overlay helper." />
+        <Readout label="Borderless/windowed fullscreen" value="Targeted by the native overlay helper." />
         <Readout label="Display bounds" value="Returned with each selected region as display_id and scale_factor." />
       </Panel>
       <Panel title="Map Overlay Controls">

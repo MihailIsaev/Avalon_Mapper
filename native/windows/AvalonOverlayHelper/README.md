@@ -49,3 +49,11 @@ let mut child = Command::new(helper)
 ```
 
 Bundle the published `AvalonOverlayHelper.exe` as a Tauri resource, then use the same line-delimited JSON stdin/stdout handling that the macOS helper uses.
+
+During development the Rust backend also searches this publish directory directly:
+
+```text
+native\windows\AvalonOverlayHelper\bin\Release\net8.0-windows\win-x64\publish\AvalonOverlayHelper.exe
+```
+
+That means after publishing on Windows, the main Tauri application can launch this helper without manually starting `AvalonOverlayHelper.exe`.

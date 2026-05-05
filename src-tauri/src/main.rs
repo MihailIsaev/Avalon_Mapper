@@ -1614,12 +1614,15 @@ fn run_overlay_selection(
 fn overlay_diagnostics() -> OverlayDiagnostics {
     OverlayDiagnostics {
         platform: std::env::consts::OS.to_string(),
-        native_overlay_available: cfg!(target_os = "macos"),
+        native_overlay_available: cfg!(any(target_os = "macos", target_os = "windows")),
         helper_strategy: if cfg!(target_os = "macos") {
             "Swift/AppKit native helpers: modal selector plus persistent non-activating click-through map overlay"
                 .to_string()
+        } else if cfg!(target_os = "windows") {
+            "C#/.NET WinForms native helper: modal selector plus persistent layered click-through map overlay"
+                .to_string()
         } else {
-            "Windows native layered-window helper is planned; current build exposes the interface only"
+            "Native overlay helper is not implemented for this platform"
                 .to_string()
         },
         exclusive_fullscreen_supported: false,
@@ -1724,7 +1727,11 @@ fn get_map_overlay_status(
         visible,
         interactive,
         bounds: read_overlay_bounds(&state)?,
-        hotkey: "Cmd+Shift+M".to_string(),
+        hotkey: if cfg!(target_os = "windows") {
+            "Alt+Shift+M".to_string()
+        } else {
+            "Cmd+Shift+M".to_string()
+        },
         helper_running: true,
         exclusive_fullscreen_note:
             "Exclusive fullscreen cannot be overlaid reliably. Use Borderless Window / Windowed Fullscreen."
@@ -1753,14 +1760,14 @@ fn capture_portal_destination(
 }
 
 fn run_native_overlay(app: &AppHandle, mode: &str) -> Result<OverlaySelection, String> {
-    if !cfg!(target_os = "macos") {
-        return Err("Native overlay helper is implemented for macOS in this phase".to_string());
+    if !cfg!(any(target_os = "macos", target_os = "windows")) {
+        return Err("Native overlay helper is implemented for macOS and Windows".to_string());
     }
     if mode != "region" && mode != "portal-size" && mode != "diagnostic" {
         return Err("Unknown overlay mode".to_string());
     }
 
-    let helper = ensure_macos_overlay_helper(app)?;
+    let helper = ensure_native_overlay_helper(app)?;
     let output = Command::new(helper)
         .arg("--mode")
         .arg(mode)
@@ -1811,8 +1818,8 @@ fn send_map_overlay_command(
 }
 
 fn ensure_map_overlay_running(app: &AppHandle, state: &AppState) -> Result<(), String> {
-    if !cfg!(target_os = "macos") {
-        return Err("The persistent map overlay helper is implemented for macOS in this phase".to_string());
+    if !cfg!(any(target_os = "macos", target_os = "windows")) {
+        return Err("The persistent map overlay helper is implemented for macOS and Windows".to_string());
     }
 
     {
@@ -1828,7 +1835,7 @@ fn ensure_map_overlay_running(app: &AppHandle, state: &AppState) -> Result<(), S
         }
     }
 
-    let helper = ensure_macos_overlay_helper(app)?;
+    let helper = ensure_native_overlay_helper(app)?;
     let bounds_state_path = app
         .path()
         .app_data_dir()
@@ -2497,6 +2504,16 @@ fn overlay_name_for_bridge_id(
         .unwrap_or_else(|| format!("node:{id}"))
 }
 
+fn ensure_native_overlay_helper(app: &AppHandle) -> Result<PathBuf, String> {
+    if cfg!(target_os = "macos") {
+        return ensure_macos_overlay_helper(app);
+    }
+    if cfg!(target_os = "windows") {
+        return ensure_windows_overlay_helper(app);
+    }
+    Err("Native overlay helper is not implemented for this platform".to_string())
+}
+
 fn ensure_macos_overlay_helper(app: &AppHandle) -> Result<PathBuf, String> {
     let source = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -2542,6 +2559,63 @@ fn ensure_macos_overlay_helper(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(helper)
 }
 
+fn ensure_windows_overlay_helper(app: &AppHandle) -> Result<PathBuf, String> {
+    let exe_name = "AvalonOverlayHelper.exe";
+    let project_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or_else(|| "Could not resolve project root".to_string())?;
+
+    let mut candidates = Vec::new();
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        candidates.push(resource_dir.join(exe_name));
+        candidates.push(resource_dir.join("AvalonOverlayHelper").join(exe_name));
+        candidates.push(resource_dir.join("native").join("windows").join(exe_name));
+    }
+
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(dir) = current_exe.parent() {
+            candidates.push(dir.join(exe_name));
+            candidates.push(dir.join("resources").join(exe_name));
+        }
+    }
+
+    candidates.push(
+        project_root
+            .join("native")
+            .join("windows")
+            .join("AvalonOverlayHelper")
+            .join("bin")
+            .join("Release")
+            .join("net8.0-windows")
+            .join("win-x64")
+            .join("publish")
+            .join(exe_name),
+    );
+    candidates.push(
+        project_root
+            .join("native")
+            .join("windows")
+            .join("AvalonOverlayHelper")
+            .join(exe_name),
+    );
+
+    for candidate in &candidates {
+        if candidate.exists() {
+            return Ok(candidate.clone());
+        }
+    }
+
+    Err(format!(
+        "Missing Windows overlay helper. Build it with `dotnet publish -c Release -r win-x64 --self-contained`, then copy AvalonOverlayHelper.exe into a Tauri resource path. Checked: {}",
+        candidates
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))
+}
+
 fn capture_current_location_inner(app: &AppHandle, state: &AppState) -> Result<CaptureOutcome, String> {
     let region = {
         let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
@@ -2578,7 +2652,7 @@ fn run_capture_ocr(
     center_cursor: bool,
     portal_anchor: Option<(f64, f64)>,
 ) -> Result<CaptureOcrResult, String> {
-    let helper = ensure_macos_overlay_helper(app)?;
+    let helper = ensure_native_overlay_helper(app)?;
     fs::create_dir_all(&state.capture_dir)
         .map_err(|err| format!("Could not create capture directory: {err}"))?;
     let mut command = Command::new(helper);
