@@ -100,6 +100,8 @@ struct MapEdge: Codable {
 }
 
 struct MapOverlayData: Codable {
+    let route_expires_at: String?
+    let route_edges_count: Int?
     let bridge_locations: [RouteOverlayLocation]
     let bridge_edges: [RouteOverlayEdge]
     let current_location: String?
@@ -407,6 +409,8 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
     private var visible = false
     private var interactive = false
     private var overlayData = MapOverlayData(
+        route_expires_at: nil,
+        route_edges_count: 0,
         bridge_locations: [],
         bridge_edges: [],
         current_location: nil,
@@ -762,6 +766,8 @@ final class MapOverlayView: NSView {
     var onShortcutDepthChanged: ((Int) -> Void)?
     private var shortcutDepth = 3
     var data: MapOverlayData = MapOverlayData(
+        route_expires_at: nil,
+        route_edges_count: 0,
         bridge_locations: [],
         bridge_edges: [],
         current_location: nil,
@@ -779,7 +785,62 @@ final class MapOverlayView: NSView {
         known_locations_count: 0,
         known_edges_count: 0
     )
+        private func selectedLocationName() -> String? {
+            guard let selectedLocationId else {
+                return nil
+            }
 
+            if let loc = data.locations.first(where: { $0.id == selectedLocationId }) {
+                return loc.name
+            }
+
+            if let loc = data.route_locations.first(where: { $0.id == selectedLocationId }) {
+                return loc.name
+            }
+
+            if let loc = data.bridge_locations.first(where: { $0.id == selectedLocationId }) {
+                return loc.name
+            }
+
+            return nil
+        }
+        private func copySelectedRouteToClipboard() {
+            guard !data.route_locations.isEmpty else {
+                return
+            }
+
+            var lines: [String] = []
+
+            if let expiresAt = data.route_expires_at {
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+                var date = formatter.date(from: expiresAt)
+
+                if date == nil {
+                    let fallback = ISO8601DateFormatter()
+                    fallback.formatOptions = [.withInternetDateTime]
+                    date = fallback.date(from: expiresAt)
+                }
+
+                if let date {
+                    let timestamp = Int(date.timeIntervalSince1970)
+                    lines.append("<t:\(timestamp):R>")
+                } else {
+                    fputs("[route-copy] failed to parse route_expires_at=\(expiresAt)\n", stderr)
+                    fflush(stderr)
+                }
+            }
+
+            for (index, location) in data.route_locations.enumerated() {
+                lines.append("\(index + 1))\(location.name)")
+            }
+
+            let text = lines.joined(separator: "\n")
+
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        }
     private func drawChestIcon(chest: AvalonChestInfo, rect: NSRect) {
         let body = NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5)
 
@@ -901,21 +962,110 @@ private func chestColor(_ color: String) -> NSColor {
             )
         }
     }
+    private func drawAvalonTierBorder(location: MapLocation, nodeRect: NSRect) {
+        guard location.zone_type == "avalon" else { return }
+
+        let tiers = location.avalon_tiers ?? []
+
+        if tiers.contains(8) {
+            drawT8AvalonBorder(nodeRect: nodeRect)
+            return
+        }
+
+        guard let tierColor = avalonTierBorderColor(location) else { return }
+
+        tierColor.setStroke()
+        let tierBorder = NSBezierPath(ovalIn: nodeRect.insetBy(dx: -5.0, dy: -5.0))
+        tierBorder.lineWidth = 4.5
+        tierBorder.stroke()
+    }
+
+    private func drawT8AvalonBorder(nodeRect: NSRect) {
+        let outerRect = nodeRect.insetBy(dx: -4.0, dy: -4.0)
+        let innerRect = nodeRect.insetBy(dx: -1.5, dy: -1.5)
+
+        drawStripedSilverRing(outerRect: outerRect, innerRect: innerRect)
+        colorForZoneType("avalon", isCurrent: false).setFill()
+        NSBezierPath(ovalIn: nodeRect).fill()
+        drawJaggedRing(around: outerRect)
+    }
+
+    private func drawStripedSilverRing(outerRect: NSRect, innerRect: NSRect) {
+        let outer = NSBezierPath(ovalIn: outerRect)
+
+        NSGraphicsContext.saveGraphicsState()
+        outer.addClip()
+
+        NSColor.white.setFill()
+        outer.fill()
+
+        NSColor(calibratedWhite: 0.68, alpha: 1.0).setStroke()
+
+        let step: CGFloat = 7
+        let start = outerRect.minX - outerRect.height
+        let end = outerRect.maxX + outerRect.height
+
+        var x = start
+        while x < end {
+            let line = NSBezierPath()
+            line.move(to: NSPoint(x: x, y: outerRect.minY - 4))
+            line.line(to: NSPoint(x: x + outerRect.height + 8, y: outerRect.maxY + 4))
+            line.lineWidth = 2.2
+            line.stroke()
+            x += step
+        }
+
+        NSGraphicsContext.restoreGraphicsState()
+
+        NSColor.white.withAlphaComponent(0.95).setStroke()
+        outer.lineWidth = 1.2
+        outer.stroke()
+    }
+
+    private func drawJaggedRing(around rect: NSRect) {
+        let center = NSPoint(x: rect.midX, y: rect.midY)
+        let baseRadius = max(rect.width, rect.height) / 2.0 + 2.0
+        let teeth: Int = 18
+
+        let path = NSBezierPath()
+
+        for i in 0..<(teeth * 2) {
+            let angle = CGFloat(i) * CGFloat.pi / CGFloat(teeth)
+            let radius = i % 2 == 0 ? baseRadius + 3.0 : baseRadius - 1.0
+
+            let point = NSPoint(
+                x: center.x + cos(angle) * radius,
+                y: center.y + sin(angle) * radius
+            )
+
+            if i == 0 {
+                path.move(to: point)
+            } else {
+                path.line(to: point)
+            }
+        }
+
+        path.close()
+
+        NSColor(calibratedWhite: 0.92, alpha: 0.95).setStroke()
+        path.lineWidth = 1.488
+        path.stroke()
+    }
     private func avalonTierBorderColor(_ location: MapLocation) -> NSColor? {
         guard location.zone_type == "avalon" else { return nil }
 
         let tiers = location.avalon_tiers ?? []
 
-        if tiers.contains(4) {
-            return NSColor(calibratedRed: 0.02, green: 0.12, blue: 0.36, alpha: 1.0)
-        }
-
-        if tiers.contains(6) {
-            return NSColor(calibratedRed: 0.72, green: 0.32, blue: 0.05, alpha: 1.0)
-        }
-
         if tiers.contains(8) {
-            return NSColor(calibratedWhite: 0.82, alpha: 1.0)
+            return NSColor(calibratedWhite: 0.88, alpha: 1.0)
+        }
+
+//         if tiers.contains(6) {
+//             return NSColor(calibratedRed: 0.72, green: 0.32, blue: 0.05, alpha: 1.0)
+//         }
+
+        if tiers.contains(4) {
+            return NSColor(calibratedRed: 0.05, green: 0.45, blue: 0.36, alpha: 1.0)
         }
 
         return nil
@@ -1003,12 +1153,22 @@ private func chestColor(_ color: String) -> NSColor {
             at: NSPoint(x: findButtonRect().minX + 10, y: findButtonRect().minY + 5),
             withAttributes: tinyAttrs
         )
-
+        NSColor.systemBlue.withAlphaComponent(0.30).setFill()
+        NSBezierPath(roundedRect: copyRouteButtonRect(), xRadius: 5, yRadius: 5).fill()
+        "Copy".draw(
+            at: NSPoint(x: copyRouteButtonRect().minX + 10, y: copyRouteButtonRect().minY + 5),
+            withAttributes: tinyAttrs
+        )
         NSColor.systemRed.withAlphaComponent(0.35).setFill()
         NSBezierPath(roundedRect: delRoutesButtonRect(), xRadius: 5, yRadius: 5).fill()
         "DelRoutes".draw(
             at: NSPoint(x: delRoutesButtonRect().minX + 8, y: delRoutesButtonRect().minY + 5),
             withAttributes: tinyAttrs
+        )
+        let countText = "\(data.route_edges_count ?? data.route_edges.count)"
+        countText.draw(
+            at: NSPoint(x: routeCountRect().minX + 10, y: routeCountRect().minY + 4),
+            withAttributes: smallAttrs
         )
     }
 
@@ -1168,10 +1328,20 @@ private func chestColor(_ color: String) -> NSColor {
             needsDisplay = true
             return
         }
-
+        if copyRouteButtonRect().contains(point) {
+            copySelectedRouteToClipboard()
+            needsDisplay = true
+            return
+        }
         if findButtonRect().contains(point) {
             activeRouteField = nil
-            onFindRoute?(routeFromText, routeToText)
+
+            let finalTo = routeToText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? (selectedLocationName() ?? "")
+                : routeToText
+
+            onFindRoute?(routeFromText, finalTo)
+
             needsDisplay = true
             return
         }
@@ -1342,7 +1512,13 @@ private func chestColor(_ color: String) -> NSColor {
             attrs: smallAttrs
         )
     }
+    private func statusColor(_ edge: MapEdge) -> NSColor {
+        if edge.source == "traversed" {
+            return NSColor(calibratedRed: 1.0, green: 0.95, blue: 0.75, alpha: 1.0)
+        }
 
+        return NSColor.systemTeal
+    }
    private func drawGraphPreview(in rect: NSRect) {
 
         NSColor(calibratedWhite: 1.0, alpha: 0.06).setFill()
@@ -1495,12 +1671,7 @@ private func chestColor(_ color: String) -> NSColor {
             let border = NSBezierPath(ovalIn: nodeRect.insetBy(dx: -1.5, dy: -1.5))
             border.lineWidth = isSelected ? 3.0 : (isCurrent ? 2.0 : 1.0)
             border.stroke()
-            if let tierColor = avalonTierBorderColor(location) {
-                tierColor.setStroke()
-                let tierBorder = NSBezierPath(ovalIn: nodeRect.insetBy(dx: -4.0, dy: -4.0))
-                tierBorder.lineWidth = 2.1488
-                tierBorder.stroke()
-            }
+            drawAvalonTierBorder(location: location, nodeRect: nodeRect)
         }
         for location in data.bridge_locations {
             guard let point = positions[location.id] else { continue }
@@ -1550,25 +1721,7 @@ private func chestColor(_ color: String) -> NSColor {
         }
    }
 
-   private func drawNeighborList(in rect: NSRect) {
-        "Neighbor portals".draw(at: NSPoint(x: rect.minX, y: rect.maxY - 14), withAttributes: labelAttrs)
-        let currentName = data.current_location
-        let neighbors = data.edges.filter { edge in
-            edge.from_location_name == currentName || edge.to_location_name == currentName
-        }.prefix(5)
-        if neighbors.isEmpty {
-            "No known neighbors".draw(at: NSPoint(x: rect.minX, y: rect.maxY - 38), withAttributes: smallAttrs)
-            return
-        }
-        for (index, edge) in neighbors.enumerated() {
-            let destination = edge.from_location_name == currentName ? edge.to_location_name : edge.from_location_name
-            let y = rect.maxY - CGFloat(38 + index * 24)
-            statusColor(edge).setFill()
-            NSBezierPath(ovalIn: NSRect(x: rect.minX, y: y + 3, width: 8, height: 8)).fill()
-            clipped(destination, at: NSPoint(x: rect.minX + 14, y: y), maxWidth: rect.width - 86, attrs: smallAttrs)
-            edgeStatus(edge).draw(at: NSPoint(x: rect.maxX - 62, y: y), withAttributes: tinyAttrs)
-        }
-    }
+
 
 
     private func drawResizeHandle(in rect: NSRect) {
@@ -1590,6 +1743,13 @@ private func chestColor(_ color: String) -> NSColor {
         text.draw(in: NSRect(x: point.x, y: point.y, width: maxWidth, height: 18), withAttributes: attributes)
     }
 
+    private func copyRouteButtonRect() -> NSRect {
+        NSRect(x: findButtonRect().minX, y: findButtonRect().minY - 30, width: findButtonRect().width, height: 24)
+    }
+
+    private func routeCountRect() -> NSRect {
+        NSRect(x: delRoutesButtonRect().minX, y: delRoutesButtonRect().minY - 30, width: delRoutesButtonRect().width, height: 24)
+    }
     private func headerRect() -> NSRect {
         NSRect(x: 0, y: bounds.height - 44, width: bounds.width, height: 44)
     }
@@ -1682,25 +1842,6 @@ private func chestColor(_ color: String) -> NSColor {
         )
     }
 
-    private func edgeStatus(_ edge: MapEdge) -> String {
-        let formatter = ISO8601DateFormatter()
-        guard let date = formatter.date(from: edge.last_seen_at) else { return edge.status ?? "observed" }
-        let age = Date().timeIntervalSince(date)
-        if age < 24 * 60 * 60 { return "active" }
-        if age < 3 * 24 * 60 * 60 { return "stale" }
-        return "expired"
-    }
-
-    private func statusColor(_ edge: MapEdge) -> NSColor {
-        if edge.source == "traversed" {
-            return NSColor.systemYellow
-        }
-        switch edgeStatus(edge) {
-        case "active": return .systemTeal
-        case "stale": return .systemYellow
-        default: return .systemGray
-        }
-    }
 
     private var titleAttrs: [NSAttributedString.Key: Any] {
         [.font: NSFont.systemFont(ofSize: 15, weight: .semibold), .foregroundColor: NSColor.white]

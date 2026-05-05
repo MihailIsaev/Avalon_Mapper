@@ -511,6 +511,8 @@ struct MapOverlayStatus {
 
 #[derive(Debug, Serialize)]
 struct MapOverlayData {
+    route_expires_at: Option<String>,
+    route_edges_count: i64,
     current_location: Option<String>,
     last_portal_destination: Option<String>,
     last_portal_expires_in_seconds: Option<i64>,
@@ -1952,6 +1954,8 @@ fn spawn_map_overlay_stdout_reader(
                                         .join(" -> ")
                                 );
 
+                                data.route_edges_count = route_edges.len() as i64;
+                                data.route_expires_at = route_min_expires_at(&conn, &route_locations).ok().flatten();
                                 data.route_locations = route_locations;
                                 data.route_edges = route_edges;
                                 data.last_capture_status = "Route found".to_string();
@@ -2067,14 +2071,17 @@ fn build_map_overlay_data(state: &AppState) -> Result<MapOverlayData, String> {
 
 fn build_map_overlay_data_from_conn(conn: &Connection) -> Result<MapOverlayData, String> {
     delete_expired_edges(conn)?;
-    debug_avalon_raw_components("Xilos-Osayam");
-    debug_avalon_raw_components("Oiritos-Eramtum");
+
+//     debug_avalon_raw_components("Xilos-Osayam");
+//     debug_avalon_raw_components("Oiritos-Eramtum");
     let locations = load_locations(conn)?;
     let edges = load_edges(conn)?;
     let (bridge_locations, bridge_edges) = build_overlay_shortcuts(conn, &locations)?;
     let known_locations_count = locations.len() as i64;
     let known_edges_count = edges.len() as i64;
     Ok(MapOverlayData {
+        route_expires_at: None,
+        route_edges_count: 0,
         route_locations: Vec::new(),
         route_edges: Vec::new(),
         bridge_locations,
@@ -2107,6 +2114,68 @@ fn read_overlay_bounds(state: &AppState) -> Result<MapOverlayBounds, String> {
         .and_then(|value| serde_json::from_str::<MapOverlayBounds>(&value).ok())
         .map(sanitize_overlay_bounds)
         .unwrap_or_else(default_overlay_bounds))
+}
+
+fn route_min_expires_at(
+    conn: &Connection,
+    route_locations: &[RouteOverlayLocation],
+) -> Result<Option<String>, String> {
+    let mut min_expires: Option<chrono::DateTime<Utc>> = None;
+
+    for pair in route_locations.windows(2) {
+        let a = &pair[0];
+        let b = &pair[1];
+
+        eprintln!(
+            "[route-copy-debug] checking edge: {}({}) -> {}({})",
+            a.name, a.normalized_name, b.name, b.normalized_name
+        );
+
+        let expires_at = conn
+            .query_row(
+                r#"
+                SELECT e.expires_at
+                FROM edges e
+                JOIN locations lf ON lf.id = e.from_location_id
+                JOIN locations lt ON lt.id = e.to_location_id
+                WHERE (
+                    lf.normalized_name = ?1 AND lt.normalized_name = ?2
+                )
+                OR (
+                    lf.normalized_name = ?2 AND lt.normalized_name = ?1
+                )
+                LIMIT 1
+                "#,
+                params![a.normalized_name, b.normalized_name],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()
+            .map_err(db_err)?
+            .flatten();
+
+        eprintln!("[route-copy-debug] expires_at={expires_at:?}");
+
+        let Some(raw) = expires_at else {
+            continue;
+        };
+
+        let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(&raw) else {
+            eprintln!("[route-copy-debug] invalid expires_at={raw:?}");
+            continue;
+        };
+
+        let parsed = parsed.with_timezone(&Utc);
+
+        min_expires = Some(match min_expires {
+            Some(current) => current.min(parsed),
+            None => parsed,
+        });
+    }
+
+    let result = min_expires.map(|dt| dt.to_rfc3339());
+    eprintln!("[route-copy-debug] final route_expires_at={result:?}");
+
+    Ok(result)
 }
 
 fn save_overlay_bounds(state: &AppState, bounds: &MapOverlayBounds) -> Result<(), String> {
@@ -2358,58 +2427,58 @@ fn shortest_path_bfs_limited(
     None
 }
 
-fn debug_avalon_raw_components(name: &str) {
-    let normalized_target = normalize_location_name(name);
-
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("Could not resolve project root")
-        .join("data/albion_navigator_import.json");
-
-    let Ok(text) = fs::read_to_string(&path) else {
-        eprintln!("[avalon-debug] cannot read {}", path.display());
-        return;
-    };
-
-    let Ok(root) = serde_json::from_str::<serde_json::Value>(&text) else {
-        eprintln!("[avalon-debug] invalid json");
-        return;
-    };
-
-    let records = root
-        .get("avalon_locations")
-        .or_else(|| root.get("avalon"))
-        .or_else(|| root.get("avalon_components"))
-        .or_else(|| root.get("avalon_component_records"))
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-
-    for record in records {
-        let name = record.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        let normalized = record
-            .get("normalized_name")
-            .and_then(|v| v.as_str())
-            .map(|v| v.to_string())
-            .unwrap_or_else(|| normalize_location_name(name));
-
-        if normalized != normalized_target {
-            continue;
-        }
-
-        eprintln!("[avalon-debug] LOCATION: {name} / {normalized}");
-
-        if let Some(components) = record.get("components").and_then(|v| v.as_array()) {
-            for component in components {
-                eprintln!("[avalon-debug] component = {}", component);
-            }
-        }
-
-        return;
-    }
-
-    eprintln!("[avalon-debug] not found: {name} / {normalized_target}");
-}
+// fn debug_avalon_raw_components(name: &str) {
+//     let normalized_target = normalize_location_name(name);
+//
+//     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+//         .parent()
+//         .expect("Could not resolve project root")
+//         .join("data/albion_navigator_import.json");
+//
+//     let Ok(text) = fs::read_to_string(&path) else {
+//         eprintln!("[avalon-debug] cannot read {}", path.display());
+//         return;
+//     };
+//
+//     let Ok(root) = serde_json::from_str::<serde_json::Value>(&text) else {
+//         eprintln!("[avalon-debug] invalid json");
+//         return;
+//     };
+//
+//     let records = root
+//         .get("avalon_locations")
+//         .or_else(|| root.get("avalon"))
+//         .or_else(|| root.get("avalon_components"))
+//         .or_else(|| root.get("avalon_component_records"))
+//         .and_then(|v| v.as_array())
+//         .cloned()
+//         .unwrap_or_default();
+//
+//     for record in records {
+//         let name = record.get("name").and_then(|v| v.as_str()).unwrap_or("");
+//         let normalized = record
+//             .get("normalized_name")
+//             .and_then(|v| v.as_str())
+//             .map(|v| v.to_string())
+//             .unwrap_or_else(|| normalize_location_name(name));
+//
+//         if normalized != normalized_target {
+//             continue;
+//         }
+//
+//         eprintln!("[avalon-debug] LOCATION: {name} / {normalized}");
+//
+//         if let Some(components) = record.get("components").and_then(|v| v.as_array()) {
+//             for component in components {
+//                 eprintln!("[avalon-debug] component = {}", component);
+//             }
+//         }
+//
+//         return;
+//     }
+//
+//     eprintln!("[avalon-debug] not found: {name} / {normalized_target}");
+// }
 
 fn overlay_name_for_bridge_id(
     _conn: &Connection,
