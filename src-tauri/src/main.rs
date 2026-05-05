@@ -11,6 +11,8 @@ use std::{
     thread,
     time::Instant,
 };
+#[cfg(target_os = "windows")]
+use std::sync::mpsc;
 use tauri::{AppHandle, Manager};
 
 struct AppState {
@@ -19,6 +21,8 @@ struct AppState {
     capture_dir: PathBuf,
     map_overlay: Arc<Mutex<Option<MapOverlayProcess>>>,
     paddle_ocr: Arc<Mutex<Option<PaddleOcrProcess>>>,
+    #[cfg(target_os = "windows")]
+    windows_hotkeys: Option<WindowsHotkeyManager>,
 }
 
 
@@ -29,7 +33,7 @@ struct HotkeyBinding {
     label: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 struct HotkeySettings {
     toggle_overlay: HotkeyBinding,
     capture_current: HotkeyBinding,
@@ -245,6 +249,149 @@ struct PaddleOcrProcess {
     child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
+}
+
+#[cfg(target_os = "windows")]
+struct WindowsHotkeyManager {
+    sender: mpsc::Sender<WindowsHotkeyCommand>,
+    thread_id: Arc<Mutex<Option<u32>>>,
+}
+
+#[cfg(target_os = "windows")]
+enum WindowsHotkeyCommand {
+    Update(HotkeySettings),
+    Stop,
+}
+
+#[cfg(target_os = "windows")]
+impl WindowsHotkeyManager {
+    fn start(
+        settings: HotkeySettings,
+        db_path: PathBuf,
+        helper_path: PathBuf,
+        capture_dir: PathBuf,
+        overlay: Arc<Mutex<Option<MapOverlayProcess>>>,
+        paddle_ocr: Arc<Mutex<Option<PaddleOcrProcess>>>,
+    ) -> Self {
+        let (sender, receiver) = mpsc::channel::<WindowsHotkeyCommand>();
+        let thread_id = Arc::new(Mutex::new(None));
+        let thread_id_for_thread = Arc::clone(&thread_id);
+
+        thread::spawn(move || {
+            let current_thread_id = unsafe { windows_hotkeys::GetCurrentThreadId() };
+            let mut bootstrap_message = windows_hotkeys::Msg::default();
+            unsafe {
+                windows_hotkeys::PeekMessageW(
+                    &mut bootstrap_message,
+                    std::ptr::null_mut(),
+                    0,
+                    0,
+                    windows_hotkeys::PM_NOREMOVE,
+                );
+            }
+            if let Ok(mut slot) = thread_id_for_thread.lock() {
+                *slot = Some(current_thread_id);
+            }
+
+            let mut registered_ids = Vec::<i32>::new();
+            apply_windows_hotkey_settings(&settings, &mut registered_ids);
+
+            loop {
+                let mut message = windows_hotkeys::Msg::default();
+                let result = unsafe {
+                    windows_hotkeys::GetMessageW(&mut message, std::ptr::null_mut(), 0, 0)
+                };
+
+                if result <= 0 {
+                    break;
+                }
+
+                match message.message {
+                    windows_hotkeys::WM_HOTKEY => match message.w_param as i32 {
+                        1 => {
+                            eprintln!("[windows-hotkey] toggle overlay");
+                            let _ = send_map_overlay_command_direct(
+                                &overlay,
+                                json!({ "type": "toggle" }),
+                            );
+                        }
+                        2 => {
+                            eprintln!("[windows-hotkey] capture current location");
+                            let _ = handle_hotkey_capture(
+                                &db_path,
+                                &helper_path,
+                                &capture_dir,
+                                &overlay,
+                                &paddle_ocr,
+                                "current_location",
+                            );
+                        }
+                        3 => {
+                            eprintln!("[windows-hotkey] capture portal");
+                            let _ = handle_hotkey_capture(
+                                &db_path,
+                                &helper_path,
+                                &capture_dir,
+                                &overlay,
+                                &paddle_ocr,
+                                "portal",
+                            );
+                        }
+                        _ => {}
+                    },
+                    windows_hotkeys::WM_APP_UPDATE_HOTKEYS => {
+                        let mut should_stop = false;
+                        while let Ok(command) = receiver.try_recv() {
+                            match command {
+                                WindowsHotkeyCommand::Update(settings) => {
+                                    apply_windows_hotkey_settings(&settings, &mut registered_ids);
+                                }
+                                WindowsHotkeyCommand::Stop => {
+                                    should_stop = true;
+                                }
+                            }
+                        }
+                        if should_stop {
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            unregister_windows_hotkeys(&mut registered_ids);
+        });
+
+        Self { sender, thread_id }
+    }
+
+    fn update(&self, settings: HotkeySettings) {
+        if self.sender.send(WindowsHotkeyCommand::Update(settings)).is_ok() {
+            self.wake();
+        }
+    }
+
+    fn wake(&self) {
+        let thread_id = self.thread_id.lock().ok().and_then(|slot| *slot);
+        if let Some(thread_id) = thread_id {
+            unsafe {
+                windows_hotkeys::PostThreadMessageW(
+                    thread_id,
+                    windows_hotkeys::WM_APP_UPDATE_HOTKEYS,
+                    0,
+                    0,
+                );
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl Drop for WindowsHotkeyManager {
+    fn drop(&mut self) {
+        let _ = self.sender.send(WindowsHotkeyCommand::Stop);
+        self.wake();
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -591,6 +738,8 @@ fn main() {
                 capture_dir,
                 map_overlay: Arc::new(Mutex::new(None)),
                 paddle_ocr: Arc::new(Mutex::new(None)),
+                #[cfg(target_os = "windows")]
+                windows_hotkeys: None,
             };
             if let Err(err) = ensure_map_overlay_running(app.handle(), &state) {
                 eprintln!("Could not start map overlay helper: {err}");
@@ -601,12 +750,27 @@ fn main() {
                     json!({ "type": "data", "data": data }),
                 );
             }
+            #[cfg(target_os = "windows")]
+            let mut state = state;
+            #[cfg(target_os = "windows")]
+            {
+                match start_windows_hotkey_manager(app.handle(), &state) {
+                    Ok(manager) => {
+                        state.windows_hotkeys = Some(manager);
+                    }
+                    Err(err) => {
+                        eprintln!("Could not start Windows global hotkeys: {err}");
+                    }
+                }
+            }
             app.manage(AppState {
                 db: state.db,
                 db_path: state.db_path,
                 capture_dir: state.capture_dir,
                 map_overlay: state.map_overlay,
                 paddle_ocr: state.paddle_ocr,
+                #[cfg(target_os = "windows")]
+                windows_hotkeys: state.windows_hotkeys,
             });
             Ok(())
         })
@@ -754,6 +918,10 @@ fn default_capture_portal_hotkey() -> HotkeyBinding {
 }
 
 fn send_hotkeys_to_overlay(app: &AppHandle, state: &AppState) -> Result<(), String> {
+    if cfg!(target_os = "windows") {
+        return Ok(());
+    }
+
     let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
 
     let toggle = read_hotkey_binding(&conn, "hotkey_toggle_overlay", default_toggle_overlay_hotkey())?;
@@ -772,6 +940,216 @@ fn send_hotkeys_to_overlay(app: &AppHandle, state: &AppState) -> Result<(), Stri
             "capture_portal": portal
         }),
     )
+}
+
+fn read_hotkey_settings_from_conn(conn: &Connection) -> Result<HotkeySettings, String> {
+    Ok(HotkeySettings {
+        toggle_overlay: read_hotkey_binding(conn, "hotkey_toggle_overlay", default_toggle_overlay_hotkey())?,
+        capture_current: read_hotkey_binding(conn, "hotkey_capture_current", default_capture_current_hotkey())?,
+        capture_portal: read_hotkey_binding(conn, "hotkey_capture_portal", default_capture_portal_hotkey())?,
+    })
+}
+
+#[cfg(target_os = "windows")]
+fn start_windows_hotkey_manager(
+    app: &AppHandle,
+    state: &AppState,
+) -> Result<WindowsHotkeyManager, String> {
+    let settings = {
+        let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
+        read_hotkey_settings_from_conn(&conn)?
+    };
+    let helper_path = ensure_native_overlay_helper(app)?;
+
+    Ok(WindowsHotkeyManager::start(
+        settings,
+        state.db_path.clone(),
+        helper_path,
+        state.capture_dir.clone(),
+        Arc::clone(&state.map_overlay),
+        Arc::clone(&state.paddle_ocr),
+    ))
+}
+
+#[cfg(target_os = "windows")]
+fn apply_windows_hotkey_settings(settings: &HotkeySettings, registered_ids: &mut Vec<i32>) {
+    unregister_windows_hotkeys(registered_ids);
+    register_windows_hotkey(1, &settings.toggle_overlay, registered_ids);
+    register_windows_hotkey(2, &settings.capture_current, registered_ids);
+    register_windows_hotkey(3, &settings.capture_portal, registered_ids);
+}
+
+#[cfg(target_os = "windows")]
+fn unregister_windows_hotkeys(registered_ids: &mut Vec<i32>) {
+    for id in registered_ids.drain(..) {
+        unsafe {
+            windows_hotkeys::UnregisterHotKey(std::ptr::null_mut(), id);
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn register_windows_hotkey(id: i32, binding: &HotkeyBinding, registered_ids: &mut Vec<i32>) {
+    let Some(vk) = windows_hotkey_vk(binding.key_code) else {
+        eprintln!(
+            "[windows-hotkey] skipping unsupported hotkey id={id} key_code={}",
+            binding.key_code
+        );
+        return;
+    };
+    let modifiers = windows_hotkey_modifiers(binding) | windows_hotkeys::MOD_NOREPEAT;
+    if modifiers == windows_hotkeys::MOD_NOREPEAT {
+        eprintln!(
+            "[windows-hotkey] skipping hotkey id={id} key_code={} because it has no modifier",
+            binding.key_code
+        );
+        return;
+    }
+
+    let ok = unsafe { windows_hotkeys::RegisterHotKey(std::ptr::null_mut(), id, modifiers, vk) };
+    if ok == 0 {
+        let error = std::io::Error::last_os_error();
+        eprintln!(
+            "[windows-hotkey] RegisterHotKey failed id={id} vk={vk} modifiers={modifiers} label={} error={error}",
+            binding.label
+        );
+        return;
+    }
+
+    registered_ids.push(id);
+    eprintln!(
+        "[windows-hotkey] RegisterHotKey ok id={id} vk={vk} modifiers={modifiers} label={}",
+        binding.label
+    );
+}
+
+#[cfg(target_os = "windows")]
+fn windows_hotkey_modifiers(binding: &HotkeyBinding) -> u32 {
+    let mut result = 0;
+    if (binding.modifiers & 0x0200) != 0 || binding.label.contains('⇧') || binding.label.contains("Shift") {
+        result |= windows_hotkeys::MOD_SHIFT;
+    }
+    if (binding.modifiers & 0x0800) != 0 || binding.label.contains('⌥') || binding.label.contains("Alt") {
+        result |= windows_hotkeys::MOD_ALT;
+    }
+    if (binding.modifiers & 0x1000) != 0 || binding.label.contains('⌃') || binding.label.contains("Ctrl") {
+        result |= windows_hotkeys::MOD_CONTROL;
+    }
+    if (binding.modifiers & 0x0100) != 0 && (binding.label.contains('⌘') || binding.label.contains("Win")) {
+        result |= windows_hotkeys::MOD_WIN;
+    }
+
+    result
+}
+
+#[cfg(target_os = "windows")]
+fn windows_hotkey_vk(key_code: u32) -> Option<u32> {
+    match key_code {
+        0 => Some(0x41),  // A
+        1 => Some(0x53),  // S
+        2 => Some(0x44),  // D
+        3 => Some(0x46),  // F
+        4 => Some(0x48),  // H
+        5 => Some(0x47),  // G
+        6 => Some(0x5A),  // Z
+        7 => Some(0x58),  // X
+        8 => Some(0x43),  // C
+        9 => Some(0x56),  // V
+        11 => Some(0x42), // B
+        12 => Some(0x51), // Q
+        13 => Some(0x57), // W
+        14 => Some(0x45), // E
+        15 => Some(0x52), // R
+        16 => Some(0x59), // Y
+        17 => Some(0x54), // T
+        18 => Some(0x31), // 1
+        19 => Some(0x32), // 2
+        20 => Some(0x33), // 3
+        21 => Some(0x34), // 4
+        22 => Some(0x36), // 6
+        23 => Some(0x35), // 5
+        24 => Some(0xBB), // =
+        25 => Some(0x39), // 9
+        26 => Some(0x37), // 7
+        27 => Some(0xBD), // -
+        28 => Some(0x38), // 8
+        29 => Some(0x30), // 0
+        30 => Some(0xDD), // ]
+        31 => Some(0x4F), // O
+        32 => Some(0x55), // U
+        33 => Some(0xDB), // [
+        34 => Some(0x49), // I
+        35 => Some(0x50), // P
+        37 => Some(0x4C), // L
+        38 => Some(0x4A), // J
+        39 => Some(0xDE), // '
+        40 => Some(0x4B), // K
+        41 => Some(0xBA), // ;
+        42 => Some(0xDC), // \
+        43 => Some(0xBC), // ,
+        44 => Some(0xBF), // /
+        45 => Some(0x4E), // N
+        46 => Some(0x4D), // M
+        47 => Some(0xBE), // .
+        49 => Some(0x20), // Space
+        50 => Some(0xC0), // `
+        0x30..=0x5A => Some(key_code),
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "windows")]
+mod windows_hotkeys {
+    use std::ffi::c_void;
+
+    pub const WM_HOTKEY: u32 = 0x0312;
+    pub const WM_APP_UPDATE_HOTKEYS: u32 = 0x8001;
+    pub const MOD_ALT: u32 = 0x0001;
+    pub const MOD_CONTROL: u32 = 0x0002;
+    pub const MOD_SHIFT: u32 = 0x0004;
+    pub const MOD_WIN: u32 = 0x0008;
+    pub const MOD_NOREPEAT: u32 = 0x4000;
+    pub const PM_NOREMOVE: u32 = 0x0000;
+
+    #[repr(C)]
+    #[derive(Default)]
+    pub struct Point {
+        pub x: i32,
+        pub y: i32,
+    }
+
+    #[repr(C)]
+    pub struct Msg {
+        pub hwnd: *mut c_void,
+        pub message: u32,
+        pub w_param: usize,
+        pub l_param: isize,
+        pub time: u32,
+        pub pt: Point,
+    }
+
+    impl Default for Msg {
+        fn default() -> Self {
+            Self {
+                hwnd: std::ptr::null_mut(),
+                message: 0,
+                w_param: 0,
+                l_param: 0,
+                time: 0,
+                pt: Point::default(),
+            }
+        }
+    }
+
+    #[link(name = "user32")]
+    extern "system" {
+        pub fn RegisterHotKey(hwnd: *mut c_void, id: i32, fs_modifiers: u32, vk: u32) -> i32;
+        pub fn UnregisterHotKey(hwnd: *mut c_void, id: i32) -> i32;
+        pub fn GetMessageW(msg: *mut Msg, hwnd: *mut c_void, min: u32, max: u32) -> i32;
+        pub fn PeekMessageW(msg: *mut Msg, hwnd: *mut c_void, min: u32, max: u32, remove_msg: u32) -> i32;
+        pub fn PostThreadMessageW(thread_id: u32, msg: u32, w_param: usize, l_param: isize) -> i32;
+        pub fn GetCurrentThreadId() -> u32;
+    }
 }
 
 fn chest_color_from_properties(properties: &[i64]) -> String {
@@ -942,11 +1320,7 @@ fn ensure_edges_ttl_columns(conn: &Connection) -> rusqlite::Result<()> {
 fn get_hotkey_settings(state: tauri::State<'_, AppState>) -> Result<HotkeySettings, String> {
     let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
 
-    Ok(HotkeySettings {
-        toggle_overlay: read_hotkey_binding(&conn, "hotkey_toggle_overlay", default_toggle_overlay_hotkey())?,
-        capture_current: read_hotkey_binding(&conn, "hotkey_capture_current", default_capture_current_hotkey())?,
-        capture_portal: read_hotkey_binding(&conn, "hotkey_capture_portal", default_capture_portal_hotkey())?,
-    })
+    read_hotkey_settings_from_conn(&conn)
 }
 
 #[tauri::command]
@@ -982,7 +1356,17 @@ fn set_hotkey_binding(
 
     send_hotkeys_to_overlay(&app, &state)?;
 
-    get_hotkey_settings(state)
+    let settings = {
+        let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
+        read_hotkey_settings_from_conn(&conn)?
+    };
+
+    #[cfg(target_os = "windows")]
+    if let Some(manager) = &state.windows_hotkeys {
+        manager.update(settings.clone());
+    }
+
+    Ok(settings)
 }
 
 #[tauri::command]
@@ -1857,11 +2241,16 @@ fn ensure_map_overlay_running(app: &AppHandle, state: &AppState) -> Result<(), S
         .map_err(|err| format!("Could not resolve app data directory: {err}"))?
         .join("map-overlay-bounds.json");
     kill_stale_windows_overlay_helpers();
-    let mut child = Command::new(&helper)
+    let mut command = Command::new(&helper);
+    command
         .arg("--mode")
         .arg("map-overlay")
         .arg("--bounds-state")
-        .arg(&bounds_state_path)
+        .arg(&bounds_state_path);
+    if cfg!(target_os = "windows") {
+        command.arg("--disable-hotkeys");
+    }
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

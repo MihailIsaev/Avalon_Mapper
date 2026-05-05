@@ -162,6 +162,7 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (isWindowsRuntime()) return;
     if (!hotkeys || recordingHotkey) return;
 
     const handler = (event: KeyboardEvent) => {
@@ -934,4 +935,8 @@ function hotkeyLabelFromKeyboardEvent(event: KeyboardEvent): string {
   parts.push(event.key.length === 1 ? event.key.toUpperCase() : event.key);
 
   return parts.join("");
+}
+
+function isWindowsRuntime(): boolean {
+  return navigator.userAgent.toLowerCase().includes("windows");
 }

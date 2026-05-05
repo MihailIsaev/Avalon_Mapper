@@ -27,7 +27,9 @@ internal static class Program
             switch (mode)
             {
                 case "map-overlay":
-                    var overlay = new MapOverlayForm(Args.Value(args, "--bounds-state"));
+                    var overlay = new MapOverlayForm(
+                        Args.Value(args, "--bounds-state"),
+                        !Args.HasFlag(args, "--disable-hotkeys"));
                     _ = overlay.Handle;
                     Application.Run();
                     return 0;
@@ -82,6 +84,11 @@ internal static class Args
     {
         return double.TryParse(Value(args, name), out var value) ? value : null;
     }
+
+    internal static bool HasFlag(string[] args, string name)
+    {
+        return args.Any(arg => string.Equals(arg, name, StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 internal sealed class MapOverlayForm : Form
@@ -93,6 +100,7 @@ internal sealed class MapOverlayForm : Form
     private const int WmHotkey = 0x0312;
 
     private readonly string? _boundsStatePath;
+    private readonly bool _hotkeysEnabled;
     private readonly object _dataLock = new();
     private MapOverlayData _data = MapOverlayData.Empty;
     private bool _interactive;
@@ -109,9 +117,10 @@ internal sealed class MapOverlayForm : Form
     private string _routeToText = "";
     private RouteField? _activeRouteField;
 
-    public MapOverlayForm(string? boundsStatePath)
+    public MapOverlayForm(string? boundsStatePath, bool hotkeysEnabled)
     {
         _boundsStatePath = boundsStatePath;
+        _hotkeysEnabled = hotkeysEnabled;
 
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -154,7 +163,10 @@ internal sealed class MapOverlayForm : Form
     {
         base.OnHandleCreated(e);
         ApplyClickThrough();
-        RegisterHotkeys();
+        if (_hotkeysEnabled)
+        {
+            RegisterHotkeys();
+        }
         StartCommandReader();
     }
 
@@ -267,7 +279,10 @@ internal sealed class MapOverlayForm : Form
                     }
                     break;
                 case "hotkeys":
-                    RegisterHotkeys(command);
+                    if (_hotkeysEnabled)
+                    {
+                        RegisterHotkeys(command);
+                    }
                     break;
                 case "capture_current":
                     Program.WriteJson(new { @event = "capture_current" });
