@@ -231,6 +231,16 @@ struct MapOverlayProcess {
     stdin: ChildStdin,
 }
 
+impl Drop for MapOverlayProcess {
+    fn drop(&mut self) {
+        if matches!(self.child.try_wait(), Ok(None)) {
+            eprintln!("[overlay-helper] stopping orphaned helper pid={}", self.child.id());
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+}
+
 struct PaddleOcrProcess {
     child: Child,
     stdin: ChildStdin,
@@ -1835,6 +1845,7 @@ fn ensure_map_overlay_running(app: &AppHandle, state: &AppState) -> Result<(), S
             if process.child.try_wait().map_err(|err| err.to_string())?.is_none() {
                 return Ok(());
             }
+            eprintln!("[overlay-helper] previous helper pid={} exited; starting a new one", process.child.id());
             *overlay = None;
         }
     }
@@ -1845,6 +1856,7 @@ fn ensure_map_overlay_running(app: &AppHandle, state: &AppState) -> Result<(), S
         .app_data_dir()
         .map_err(|err| format!("Could not resolve app data directory: {err}"))?
         .join("map-overlay-bounds.json");
+    kill_stale_windows_overlay_helpers();
     let mut child = Command::new(&helper)
         .arg("--mode")
         .arg("map-overlay")
@@ -1855,6 +1867,7 @@ fn ensure_map_overlay_running(app: &AppHandle, state: &AppState) -> Result<(), S
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|err| format!("Could not launch map overlay helper: {err}"))?;
+    eprintln!("[overlay-helper] persistent map overlay pid={}", child.id());
     if let Some(stderr) = child.stderr.take() {
         spawn_stderr_forwarder("overlay-helper", stderr);
     }
@@ -1896,6 +1909,38 @@ fn ensure_map_overlay_running(app: &AppHandle, state: &AppState) -> Result<(), S
     let _ = send_hotkeys_to_overlay(app, state);
 
     Ok(())
+}
+
+fn kill_stale_windows_overlay_helpers() {
+    if !cfg!(target_os = "windows") {
+        return;
+    }
+
+    let output = Command::new("taskkill")
+        .arg("/IM")
+        .arg("AvalonOverlayHelper.exe")
+        .arg("/F")
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            eprintln!("[overlay-helper] stopped stale AvalonOverlayHelper.exe processes");
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let text = format!("{stdout}\n{stderr}");
+            if !text.contains("not found") && !text.contains("не найден") {
+                let trimmed = text.trim();
+                if !trimmed.is_empty() {
+                    eprintln!("[overlay-helper] taskkill reported: {trimmed}");
+                }
+            }
+        }
+        Err(err) => {
+            eprintln!("[overlay-helper] could not run taskkill for stale helpers: {err}");
+        }
+    }
 }
 
 fn spawn_map_overlay_stdout_reader(
