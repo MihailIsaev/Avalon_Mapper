@@ -1,20 +1,33 @@
 #!/usr/bin/env python3
 import json
+import os
 import re
 import sys
 import time
+
+os.environ.setdefault("PADDLE_PDX_MODEL_SOURCE", "BOS")
+
 from paddleocr import PaddleOCR
 
 MODEL_NAME = "en_PP-OCRv5_mobile_rec"
+DETECTION_MODEL_NAME = "PP-OCRv5_mobile_det"
 
+print(
+    f"[paddleocr] initializing detection_model={DETECTION_MODEL_NAME} "
+    f"recognition_model={MODEL_NAME} source={os.environ.get('PADDLE_PDX_MODEL_SOURCE')}",
+    file=sys.stderr,
+    flush=True,
+)
 ocr = PaddleOCR(
     lang="en",
+    text_detection_model_name=DETECTION_MODEL_NAME,
     text_recognition_model_name=MODEL_NAME,
     use_doc_orientation_classify=False,
     use_doc_unwarping=False,
     use_textline_orientation=False,
     text_rec_score_thresh=0.45,
 )
+print("[paddleocr] initialized", file=sys.stderr, flush=True)
 
 def is_bad_current_location_line(text: str) -> bool:
     text = text.strip()

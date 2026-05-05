@@ -6,13 +6,14 @@ use std::{
     fs,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
-    sync::{Arc, Mutex, OnceLock},
+    process::{Child, ChildStdin, Command, Stdio},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc, Mutex, OnceLock,
+    },
     thread,
-    time::Instant,
+    time::{Duration as StdDuration, Instant},
 };
-#[cfg(target_os = "windows")]
-use std::sync::mpsc;
 use tauri::{AppHandle, Manager};
 
 struct AppState {
@@ -248,7 +249,7 @@ impl Drop for MapOverlayProcess {
 struct PaddleOcrProcess {
     child: Child,
     stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
+    stdout_rx: mpsc::Receiver<String>,
 }
 
 #[cfg(target_os = "windows")]
@@ -708,6 +709,28 @@ struct RouteOverlayEdge {
 }
 
 static PRIMARY_LOCATION_DICTIONARY: OnceLock<Vec<String>> = OnceLock::new();
+static HOTKEY_CAPTURE_BUSY: AtomicBool = AtomicBool::new(false);
+
+struct HotkeyCaptureGuard;
+
+impl HotkeyCaptureGuard {
+    fn try_acquire() -> Option<Self> {
+        if HOTKEY_CAPTURE_BUSY
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            Some(Self)
+        } else {
+            None
+        }
+    }
+}
+
+impl Drop for HotkeyCaptureGuard {
+    fn drop(&mut self) {
+        HOTKEY_CAPTURE_BUSY.store(false, Ordering::SeqCst);
+    }
+}
 
 fn main() {
     tauri::Builder::default()
@@ -3426,6 +3449,10 @@ fn handle_hotkey_capture(
     paddle_ocr: &Arc<Mutex<Option<PaddleOcrProcess>>>,
     kind: &str,
 ) -> Result<(), String> {
+    let Some(_capture_guard) = HotkeyCaptureGuard::try_acquire() else {
+        eprintln!("[capture-hotkey] ignoring {kind} capture because another hotkey capture is still running");
+        return Ok(());
+    };
     eprintln!("[capture-hotkey] {kind} capture requested from overlay hotkey");
     let mut conn = Connection::open(db_path).map_err(db_err)?;
     initialize_schema(&conn).map_err(db_err)?;
@@ -3599,11 +3626,26 @@ fn run_paddle_ocr(
         .flush()
         .map_err(|err| format!("Could not flush PaddleOCR request: {err}"))?;
 
-    let mut line = String::new();
-    process
-        .stdout
-        .read_line(&mut line)
-        .map_err(|err| format!("Could not read PaddleOCR response: {err}"))?;
+    let line = match process.stdout_rx.recv_timeout(StdDuration::from_secs(120)) {
+        Ok(line) => line,
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            let _ = process.child.kill();
+            let _ = process.child.wait();
+            *guard = None;
+            return Err(
+                "PaddleOCR worker timed out after 120 seconds. First run may be downloading OCR models; check internet access or run tools\\windows\\run-dev.cmd again."
+                    .to_string(),
+            );
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            let status = process.child.try_wait().ok().flatten();
+            *guard = None;
+            return Err(match status {
+                Some(status) => format!("PaddleOCR worker exited before responding: {status}"),
+                None => "PaddleOCR worker stdout closed before responding".to_string(),
+            });
+        }
+    };
     if line.trim().is_empty() {
         let status = process.child.try_wait().ok().flatten();
         *guard = None;
@@ -3679,6 +3721,7 @@ fn ensure_paddle_ocr_process(
     let mut child = Command::new(python)
         .arg(helper_path)
         .arg("--server")
+        .env("PADDLE_PDX_MODEL_SOURCE", "BOS")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -3695,11 +3738,31 @@ fn ensure_paddle_ocr_process(
         .stdout
         .take()
         .ok_or_else(|| "Could not open PaddleOCR stdout".to_string())?;
+    let (stdout_tx, stdout_rx) = mpsc::channel::<String>();
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            match line {
+                Ok(line) => {
+                    if stdout_tx.send(line).is_err() {
+                        break;
+                    }
+                }
+                Err(err) => {
+                    let _ = stdout_tx.send(json!({
+                        "ok": false,
+                        "error": format!("Could not read PaddleOCR stdout: {err}")
+                    }).to_string());
+                    break;
+                }
+            }
+        }
+    });
 
     *process = Some(PaddleOcrProcess {
         child,
         stdin,
-        stdout: BufReader::new(stdout),
+        stdout_rx,
     });
     process
         .as_mut()
