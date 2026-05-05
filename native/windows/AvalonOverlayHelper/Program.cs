@@ -438,17 +438,18 @@ internal sealed class MapOverlayForm : Form
 
         if (command is { } root)
         {
+            Console.Error.WriteLine($"RegisterHotkeys command={root.GetRawText()}");
             if (root.TryGetProperty("toggle_overlay", out var toggleElement))
             {
-                toggle = toggleElement.Deserialize<HotkeyBinding>(Program.JsonOptions) ?? toggle;
+                toggle = HotkeyBinding.FromJson(toggleElement, toggle);
             }
             if (root.TryGetProperty("capture_current", out var currentElement))
             {
-                current = currentElement.Deserialize<HotkeyBinding>(Program.JsonOptions) ?? current;
+                current = HotkeyBinding.FromJson(currentElement, current);
             }
             if (root.TryGetProperty("capture_portal", out var portalElement))
             {
-                portal = portalElement.Deserialize<HotkeyBinding>(Program.JsonOptions) ?? portal;
+                portal = HotkeyBinding.FromJson(portalElement, portal);
             }
         }
 
@@ -460,7 +461,7 @@ internal sealed class MapOverlayForm : Form
     private void RegisterHotkey(int id, HotkeyBinding binding)
     {
         var key = binding.ToWindowsKey();
-        var modifiers = binding.ToWindowsModifiers();
+        var modifiers = binding.ToWindowsModifiers() | NativeMethods.MOD_NOREPEAT;
         if (key == Keys.None)
         {
             Console.Error.WriteLine($"Skipping unsupported hotkey id={id} key_code={binding.KeyCode}");
@@ -1227,11 +1228,53 @@ internal sealed record CaptureOcrResult(
 internal sealed record OcrLine(string Text, double? Confidence, OcrBbox? Bbox);
 internal sealed record OcrBbox(double X, double Y, double Width, double Height);
 
-internal sealed record HotkeyBinding(int KeyCode, uint Modifiers, string Label)
+internal sealed class HotkeyBinding
 {
-    internal static HotkeyBinding DefaultToggle => new(46, 768, "Alt+Shift+M");
-    internal static HotkeyBinding DefaultCurrent => new(37, 768, "Alt+Shift+L");
-    internal static HotkeyBinding DefaultPortal => new(35, 768, "Alt+Shift+P");
+    public HotkeyBinding()
+    {
+    }
+
+    public HotkeyBinding(int keyCode, uint modifiers, string label)
+    {
+        KeyCode = keyCode;
+        Modifiers = modifiers;
+        Label = label;
+    }
+
+    [JsonPropertyName("key_code")]
+    public int KeyCode { get; set; }
+
+    [JsonPropertyName("modifiers")]
+    public uint Modifiers { get; set; }
+
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = "";
+
+    internal static HotkeyBinding DefaultToggle => new(46, 2560, "Alt+Shift+M");
+    internal static HotkeyBinding DefaultCurrent => new(37, 2560, "Alt+Shift+L");
+    internal static HotkeyBinding DefaultPortal => new(35, 2560, "Alt+Shift+P");
+
+    internal static HotkeyBinding FromJson(JsonElement element, HotkeyBinding fallback)
+    {
+        try
+        {
+            var parsed = element.Deserialize<HotkeyBinding>(Program.JsonOptions);
+            if (parsed is null)
+            {
+                return fallback;
+            }
+            if (parsed.KeyCode == 0 && !element.TryGetProperty("key_code", out _))
+            {
+                return fallback;
+            }
+            return parsed;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Could not parse hotkey binding: {ex.Message}; json={element.GetRawText()}");
+            return fallback;
+        }
+    }
 
     internal Keys ToWindowsKey()
     {
@@ -1412,6 +1455,7 @@ internal static class NativeMethods
     internal const uint MOD_CONTROL = 0x0002;
     internal const uint MOD_SHIFT = 0x0004;
     internal const uint MOD_WIN = 0x0008;
+    internal const uint MOD_NOREPEAT = 0x4000;
     internal static readonly IntPtr HWND_TOPMOST = new(-1);
     internal const uint SWP_NOACTIVATE = 0x0010;
     internal const uint SWP_SHOWWINDOW = 0x0040;

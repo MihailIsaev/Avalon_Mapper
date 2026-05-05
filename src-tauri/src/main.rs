@@ -714,15 +714,19 @@ fn read_hotkey_binding(
     key: &str,
     fallback: HotkeyBinding,
 ) -> Result<HotkeyBinding, String> {
-    Ok(get_setting(conn, key)?
+    let binding = get_setting(conn, key)?
         .and_then(|raw| serde_json::from_str::<HotkeyBinding>(&raw).ok())
-        .unwrap_or(fallback))
+        .unwrap_or_else(|| fallback.clone());
+    if cfg!(target_os = "windows") && binding.modifiers == 0 {
+        return Ok(fallback);
+    }
+    Ok(binding)
 }
 
 fn default_toggle_overlay_hotkey() -> HotkeyBinding {
     HotkeyBinding {
         key_code: 46, // M
-        modifiers: 768, // option + shift для Carbon
+        modifiers: 2560, // option/alt + shift
         label: "⌥⇧M".to_string(),
     }
 }
@@ -730,7 +734,7 @@ fn default_toggle_overlay_hotkey() -> HotkeyBinding {
 fn default_capture_current_hotkey() -> HotkeyBinding {
     HotkeyBinding {
         key_code: 37, // L
-        modifiers: 768,
+        modifiers: 2560,
         label: "⌥⇧L".to_string(),
     }
 }
@@ -738,7 +742,7 @@ fn default_capture_current_hotkey() -> HotkeyBinding {
 fn default_capture_portal_hotkey() -> HotkeyBinding {
     HotkeyBinding {
         key_code: 35, // P
-        modifiers: 768,
+        modifiers: 2560,
         label: "⌥⇧P".to_string(),
     }
 }
@@ -3189,8 +3193,12 @@ fn run_paddle_ocr(
         .read_line(&mut line)
         .map_err(|err| format!("Could not read PaddleOCR response: {err}"))?;
     if line.trim().is_empty() {
+        let status = process.child.try_wait().ok().flatten();
         *guard = None;
-        return Err("PaddleOCR worker returned no output".to_string());
+        return Err(match status {
+            Some(status) => format!("PaddleOCR worker exited without output: {status}"),
+            None => "PaddleOCR worker returned no output".to_string(),
+        });
     }
 
     let parsed = serde_json::from_str::<PaddleOcrHelperResult>(line.trim())
@@ -3240,13 +3248,17 @@ fn ensure_paddle_ocr_process(
         .parent()
         .ok_or_else(|| "Could not resolve project root".to_string())?;
     let helper_path = project_root.join("native/ocr/paddle_ocr_helper.py");
-    let python_path = project_root.join(".venv/bin/python3");
-    let python = if python_path.exists() {
-        python_path
+    let windows_python_path = project_root.join(".venv/Scripts/python.exe");
+    let unix_python_path = project_root.join(".venv/bin/python3");
+    let python = if cfg!(target_os = "windows") && windows_python_path.exists() {
+        windows_python_path
+    } else if unix_python_path.exists() {
+        unix_python_path
     } else {
-        PathBuf::from("python3")
+        PathBuf::from(if cfg!(target_os = "windows") { "python" } else { "python3" })
     };
 
+    eprintln!("[paddleocr] starting worker python={} helper={}", python.display(), helper_path.display());
     let mut child = Command::new(python)
         .arg(helper_path)
         .arg("--server")

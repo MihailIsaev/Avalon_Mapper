@@ -88,6 +88,39 @@ function Ensure-Dotnet {
     Add-PathForProcess "C:\Program Files\dotnet\x64"
 }
 
+function Ensure-PythonOcr {
+    Add-PathForProcess "$env:LOCALAPPDATA\Programs\Python\Python311"
+    Add-PathForProcess "$env:LOCALAPPDATA\Programs\Python\Python311\Scripts"
+    if (-not (Has-Command "python") -and -not (Has-Command "py")) {
+        Install-WingetPackage "Python.Python.3.11" "Python 3.11"
+        Add-PathForProcess "$env:LOCALAPPDATA\Programs\Python\Python311"
+        Add-PathForProcess "$env:LOCALAPPDATA\Programs\Python\Python311\Scripts"
+    }
+
+    $venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
+    if (-not (Test-Path $venvPython)) {
+        Write-Step "Creating Python OCR virtualenv"
+        if (Has-Command "py") {
+            & py -3.11 -m venv ".venv"
+        } else {
+            & python -m venv ".venv"
+        }
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not create Python virtualenv for OCR"
+        }
+    }
+
+    Write-Step "Installing Python OCR dependencies"
+    & $venvPython -m pip install --upgrade pip
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not upgrade pip in OCR virtualenv"
+    }
+    & $venvPython -m pip install paddleocr
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not install paddleocr in OCR virtualenv"
+    }
+}
+
 function Ensure-Rust($Arch) {
     Add-PathForProcess "$env:USERPROFILE\.cargo\bin"
     if (-not (Has-Command "rustup")) {
@@ -195,6 +228,14 @@ function Stop-Port1420 {
     }
 }
 
+function Stop-StaleOverlayHelper {
+    $helpers = Get-Process -Name "AvalonOverlayHelper" -ErrorAction SilentlyContinue
+    foreach ($helper in $helpers) {
+        Write-Host "Stopping stale AvalonOverlayHelper.exe: PID $($helper.Id)"
+        Stop-Process -Id $helper.Id -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Ensure-TauriWindowsIcon {
     $icoPath = Join-Path $repoRoot "src-tauri\icons\icon.ico"
     $pngPath = Join-Path $repoRoot "src-tauri\icons\icon.png"
@@ -266,6 +307,7 @@ $dotnetRuntime = Get-DotnetRuntime $hostArch
 Write-Step "Preparing Avalon Mapper Windows dev environment ($hostArch)"
 Ensure-Node
 Ensure-Dotnet
+Ensure-PythonOcr
 Ensure-Rust $hostArch
 $devCmd = Ensure-BuildTools
 Ensure-TauriWindowsIcon
@@ -301,4 +343,5 @@ if ($Mode -eq "setup") {
 
 Write-Step "Starting Avalon Mapper"
 Stop-Port1420
+Stop-StaleOverlayHelper
 Invoke-InVs $devCmd $hostArch "cd /d `"$repoRoot`" && npm.cmd run dev"
