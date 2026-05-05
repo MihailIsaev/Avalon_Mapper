@@ -286,6 +286,31 @@ function Stop-StaleOverlayHelper {
         Write-Host "Stopping stale AvalonOverlayHelper.exe: PID $($helper.Id)"
         Stop-Process -Id $helper.Id -Force -ErrorAction SilentlyContinue
     }
+    foreach ($helper in $helpers) {
+        try {
+            Wait-Process -Id $helper.Id -Timeout 5 -ErrorAction SilentlyContinue
+        } catch {
+        }
+    }
+}
+
+function Wait-FileWritable($PathValue, $TimeoutSeconds = 10) {
+    if (-not (Test-Path $PathValue)) {
+        return
+    }
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $stream = [System.IO.File]::Open($PathValue, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+            $stream.Dispose()
+            return
+        } catch {
+            Start-Sleep -Milliseconds 250
+        }
+    }
+
+    throw "File is still locked and cannot be overwritten: $PathValue"
 }
 
 function Ensure-TauriWindowsIcon {
@@ -377,6 +402,9 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Step "Publishing Windows overlay helper"
+Stop-StaleOverlayHelper
+$publishedHelper = Join-Path $repoRoot "native\windows\AvalonOverlayHelper\bin\Release\net8.0-windows\$dotnetRuntime\publish\AvalonOverlayHelper.exe"
+Wait-FileWritable $publishedHelper 10
 Push-Location "native\windows\AvalonOverlayHelper"
 try {
     & dotnet publish -c Release -r $dotnetRuntime --self-contained
