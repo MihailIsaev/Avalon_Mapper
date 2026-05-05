@@ -110,14 +110,23 @@ function Ensure-PythonOcr {
         }
     }
 
-    Write-Step "Installing Python OCR dependencies"
-    & $venvPython -m pip install --upgrade pip
+    & $venvPython -c "import paddleocr" 2>$null
     if ($LASTEXITCODE -ne 0) {
-        throw "Could not upgrade pip in OCR virtualenv"
-    }
-    & $venvPython -m pip install paddleocr
-    if ($LASTEXITCODE -ne 0) {
-        throw "Could not install paddleocr in OCR virtualenv"
+        Write-Step "Installing Python OCR dependencies"
+        & $venvPython -m pip install --upgrade pip
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not upgrade pip in OCR virtualenv"
+        }
+        & $venvPython -m pip install paddleocr
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not install paddleocr in OCR virtualenv"
+        }
+        & $venvPython -c "import paddleocr"
+        if ($LASTEXITCODE -ne 0) {
+            throw "paddleocr was installed but cannot be imported from $venvPython"
+        }
+    } else {
+        Write-Host "Python OCR dependencies already installed"
     }
 }
 
