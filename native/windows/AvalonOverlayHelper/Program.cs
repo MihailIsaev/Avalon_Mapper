@@ -112,6 +112,11 @@ internal sealed class MapOverlayForm : Form
     private bool _draggingHeader;
     private bool _resizing;
     private bool _boundsDirty;
+    private bool _panningGraph;
+    private Point _panStartPoint;
+    private PointF _panStartOffset;
+    private PointF _mapPan;
+    private float _mapZoom = 1f;
     private readonly System.Windows.Forms.Timer _topmostTimer = new();
     private string _routeFromText = "";
     private string _routeToText = "";
@@ -591,7 +596,9 @@ internal sealed class MapOverlayForm : Form
             return;
         }
 
-        var points = LayoutLocations(locations, rect);
+        var graphState = g.Save();
+        g.SetClip(rect);
+        var points = LayoutLocations(locations, rect, _mapZoom, _mapPan);
         var routeEdgeIds = data.RouteEdges.Select(e => e.Id).ToHashSet();
         var routePairs = data.RouteEdges.Select(e => PairKey(e.FromLocationId, e.ToLocationId)).ToHashSet();
 
@@ -642,9 +649,10 @@ internal sealed class MapOverlayForm : Form
                 g.DrawString(TrimTo(location.Name, 18), nameFont, text, point.X + 8, point.Y - 8);
             }
         }
+        g.Restore(graphState);
     }
 
-    private static Dictionary<int, PointF> LayoutLocations(IReadOnlyList<MapLocation> locations, RectangleF rect)
+    private static Dictionary<int, PointF> LayoutLocations(IReadOnlyList<MapLocation> locations, RectangleF rect, float zoom, PointF pan)
     {
         var withCoordinates = locations.Where(l => l.X.HasValue && l.Y.HasValue).ToList();
         var points = new Dictionary<int, PointF>();
@@ -678,7 +686,22 @@ internal sealed class MapOverlayForm : Form
                 rect.Top + rect.Height / 2 + (float)Math.Sin(angle) * radiusY);
         }
 
-        return points;
+        return ApplyGraphTransform(points, rect, zoom, pan);
+    }
+
+    private static Dictionary<int, PointF> ApplyGraphTransform(Dictionary<int, PointF> points, RectangleF rect, float zoom, PointF pan)
+    {
+        if (Math.Abs(zoom - 1f) < 0.001f && Math.Abs(pan.X) < 0.001f && Math.Abs(pan.Y) < 0.001f)
+        {
+            return points;
+        }
+
+        var center = new PointF(rect.Left + rect.Width / 2f, rect.Top + rect.Height / 2f);
+        return points.ToDictionary(
+            pair => pair.Key,
+            pair => new PointF(
+                center.X + (pair.Value.X - center.X) * zoom + pan.X,
+                center.Y + (pair.Value.Y - center.Y) * zoom + pan.Y));
     }
 
     private void DrawControls(Graphics g, MapOverlayData data)
@@ -795,6 +818,22 @@ internal sealed class MapOverlayForm : Form
             return;
         }
 
+        if (Contains(GraphRect(), e.Location))
+        {
+            var hit = _nodeRects.LastOrDefault(n => Contains(n.Rect, e.Location));
+            if (hit.Id != 0)
+            {
+                _selectedLocationId = hit.Id;
+            }
+
+            _panningGraph = true;
+            _panStartPoint = e.Location;
+            _panStartOffset = _mapPan;
+            Cursor = Cursors.SizeAll;
+            Invalidate();
+            return;
+        }
+
         var hit = _nodeRects.LastOrDefault(n => Contains(n.Rect, e.Location));
         if (hit.Id != 0)
         {
@@ -824,14 +863,21 @@ internal sealed class MapOverlayForm : Form
             return;
         }
 
-        if (!_draggingHeader && !_resizing)
+        if (!_draggingHeader && !_resizing && !_panningGraph)
         {
             Cursor = Contains(ResizeHandleRect(), e.Location)
                 ? Cursors.SizeNWSE
-                : Contains(HeaderRect(), e.Location) ? Cursors.SizeAll : Cursors.Default;
+                : Contains(HeaderRect(), e.Location) || Contains(GraphRect(), e.Location) ? Cursors.SizeAll : Cursors.Default;
         }
 
-        if (_draggingHeader)
+        if (_panningGraph)
+        {
+            _mapPan = new PointF(
+                _panStartOffset.X + e.Location.X - _panStartPoint.X,
+                _panStartOffset.Y + e.Location.Y - _panStartPoint.Y);
+            Invalidate();
+        }
+        else if (_draggingHeader)
         {
             var delta = new Size(Cursor.Position.X - _dragStartCursor.X, Cursor.Position.Y - _dragStartCursor.Y);
             Bounds = new Rectangle(_dragStartBounds.Location + delta, _dragStartBounds.Size);
@@ -856,12 +902,33 @@ internal sealed class MapOverlayForm : Form
         var changed = _boundsDirty;
         _draggingHeader = false;
         _resizing = false;
+        _panningGraph = false;
         _boundsDirty = false;
         Cursor = Cursors.Default;
         if (changed)
         {
             PersistBounds();
         }
+    }
+
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        if (!_interactive || !Contains(GraphRect(), e.Location))
+        {
+            base.OnMouseWheel(e);
+            return;
+        }
+
+        var oldZoom = _mapZoom;
+        var zoomFactor = 1f + Math.Clamp(e.Delta / 120f, -6f, 6f) * 0.12f;
+        _mapZoom = Math.Clamp(_mapZoom * zoomFactor, 0.25f, 4f);
+        var ratio = _mapZoom / oldZoom;
+        var rect = GraphRect();
+        var center = new PointF(rect.Left + rect.Width / 2f, rect.Top + rect.Height / 2f);
+        _mapPan = new PointF(
+            e.Location.X - center.X - (e.Location.X - center.X - _mapPan.X) * ratio,
+            e.Location.Y - center.Y - (e.Location.Y - center.Y - _mapPan.Y) * ratio);
+        Invalidate();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
