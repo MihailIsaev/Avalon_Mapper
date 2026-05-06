@@ -1,33 +1,81 @@
 #!/usr/bin/env python3
 import json
+import faulthandler
 import os
 import re
 import sys
 import time
 
 os.environ.setdefault("PADDLE_PDX_MODEL_SOURCE", "BOS")
+faulthandler.enable(file=sys.stderr, all_threads=True)
 
 from paddleocr import PaddleOCR
 
 MODEL_NAME = "en_PP-OCRv5_mobile_rec"
 DETECTION_MODEL_NAME = "PP-OCRv5_mobile_det"
+ocr = None
+engine_name = f"paddleocr:{MODEL_NAME}"
 
-print(
-    f"[paddleocr] initializing detection_model={DETECTION_MODEL_NAME} "
-    f"recognition_model={MODEL_NAME} source={os.environ.get('PADDLE_PDX_MODEL_SOURCE')}",
-    file=sys.stderr,
-    flush=True,
-)
-ocr = PaddleOCR(
-    lang="en",
-    text_detection_model_name=DETECTION_MODEL_NAME,
-    text_recognition_model_name=MODEL_NAME,
-    use_doc_orientation_classify=False,
-    use_doc_unwarping=False,
-    use_textline_orientation=False,
-    text_rec_score_thresh=0.45,
-)
-print("[paddleocr] initialized", file=sys.stderr, flush=True)
+def initialize_ocr():
+    global engine_name
+
+    source = os.environ.get("PADDLE_PDX_MODEL_SOURCE")
+    attempts = [
+        (
+            f"paddleocr:{MODEL_NAME}",
+            {
+                "lang": "en",
+                "text_detection_model_name": DETECTION_MODEL_NAME,
+                "text_recognition_model_name": MODEL_NAME,
+                "use_doc_orientation_classify": False,
+                "use_doc_unwarping": False,
+                "use_textline_orientation": False,
+                "text_rec_score_thresh": 0.45,
+            },
+        ),
+        (
+            "paddleocr:en_default",
+            {
+                "lang": "en",
+                "use_doc_orientation_classify": False,
+                "use_doc_unwarping": False,
+                "use_textline_orientation": False,
+                "text_rec_score_thresh": 0.45,
+            },
+        ),
+    ]
+
+    errors = []
+    for name, kwargs in attempts:
+        model_summary = (
+            f"detection_model={kwargs.get('text_detection_model_name', 'default')} "
+            f"recognition_model={kwargs.get('text_recognition_model_name', 'default')}"
+        )
+        print(
+            f"[paddleocr] initializing {model_summary} source={source}",
+            file=sys.stderr,
+            flush=True,
+        )
+        try:
+            instance = PaddleOCR(**kwargs)
+            engine_name = name
+            print(f"[paddleocr] initialized engine={engine_name}", file=sys.stderr, flush=True)
+            return instance
+        except BaseException as exc:
+            errors.append(f"{name}: {type(exc).__name__}: {exc}")
+            print(
+                f"[paddleocr] init_attempt_failed engine={name} error={type(exc).__name__}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+
+    raise RuntimeError("Could not initialize PaddleOCR: " + " | ".join(errors))
+
+def get_ocr():
+    global ocr
+    if ocr is None:
+        ocr = initialize_ocr()
+    return ocr
 
 def is_bad_current_location_line(text: str) -> bool:
     text = text.strip()
@@ -56,7 +104,17 @@ def is_bad_current_location_line(text: str) -> bool:
 
 def main():
     if len(sys.argv) >= 2 and sys.argv[1] == "--server":
-        print(f"[paddleocr] server_ready model={MODEL_NAME}", file=sys.stderr, flush=True)
+        try:
+            get_ocr()
+        except BaseException as exc:
+            print(
+                f"[paddleocr] init_failed error={type(exc).__name__}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            sys.exit(2)
+
+        print(f"[paddleocr] server_ready engine={engine_name}", file=sys.stderr, flush=True)
         for line in sys.stdin:
             try:
                 request = json.loads(line)
@@ -83,7 +141,7 @@ def main():
 
 def run_ocr(kind: str, image_path: str) -> dict:
     started = time.perf_counter()
-    result = ocr.predict(image_path)
+    result = get_ocr().predict(image_path)
     duration_ms = int((time.perf_counter() - started) * 1000)
 
     lines = []
@@ -131,7 +189,7 @@ def run_ocr(kind: str, image_path: str) -> dict:
 
     return {
         "ok": True,
-        "engine": f"paddleocr:{MODEL_NAME}",
+        "engine": engine_name,
         "text": parsed_text,
         "confidence": parsed_confidence,
         "lines": lines,

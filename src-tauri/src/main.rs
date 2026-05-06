@@ -3808,9 +3808,15 @@ fn ensure_paddle_ocr_process(
     match ready_rx.recv_timeout(StdDuration::from_secs(60)) {
         Ok(Ok(())) => {}
         Ok(Err(err)) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(err);
+            let status = child.try_wait().ok().flatten();
+            if status.is_none() {
+                let _ = child.kill();
+            }
+            let status = child.wait().ok().or(status);
+            return Err(match status {
+                Some(status) => format!("{err}; exit_status={status}"),
+                None => err,
+            });
         }
         Err(mpsc::RecvTimeoutError::Timeout) => {
             let _ = child.kill();
@@ -3885,7 +3891,11 @@ fn spawn_paddle_stderr_forwarder(
                 let _ = ready_tx.send(Ok(()));
             }
 
-            if !ready_sent && trimmed.contains("Traceback") {
+            if !ready_sent
+                && (trimmed.contains("Traceback")
+                    || trimmed.contains("init_failed")
+                    || trimmed.contains("Fatal Python error"))
+            {
                 ready_sent = true;
                 let _ = ready_tx.send(Err(format!(
                     "PaddleOCR failed during initialization: {}",
