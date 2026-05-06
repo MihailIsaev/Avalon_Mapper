@@ -540,7 +540,7 @@ function Settings({
   return (
     <section className="grid two">
       <Panel title="Engine Modes">
-        <Readout label="OCR engine" value="paddleocr:auto" />
+        <Readout label="OCR engine" value="ocr:auto" />
         <Readout label="Capture engine" value="deferred until overlay is proven over Albion" />
         <Readout label="Overlay engine" value={diagnostics?.helper_strategy ?? "Loading"} />
       </Panel>

@@ -255,7 +255,7 @@ struct PaddleOcrProcess {
 impl Drop for PaddleOcrProcess {
     fn drop(&mut self) {
         if matches!(self.child.try_wait(), Ok(None)) {
-            eprintln!("[paddleocr] stopping worker pid={}", self.child.id());
+            eprintln!("[ocr] stopping worker pid={}", self.child.id());
             let _ = self.child.kill();
             let _ = self.child.wait();
         }
@@ -2561,7 +2561,7 @@ fn build_map_overlay_data_from_conn(conn: &Connection) -> Result<MapOverlayData,
         last_capture_status: get_setting(&conn, "last_capture_status")?
             .unwrap_or_else(|| "No captures yet".to_string()),
         capture_mode: "macOS CGWindowList capture".to_string(),
-        ocr_mode: "paddleocr:auto".to_string(),
+        ocr_mode: "ocr:auto".to_string(),
         db_status: "SQLite connected".to_string(),
         known_locations_count,
         known_edges_count,
@@ -3618,7 +3618,7 @@ fn run_capture_ocr_with_helper(
     }
     let paddle_kind = if kind == "current_location" { "current" } else { kind };
     eprintln!(
-        "[capture] running paddleocr kind={paddle_kind} image={}",
+        "[capture] running ocr kind={paddle_kind} image={}",
         result.image_path
     );
     let paddle = run_paddle_ocr(paddle_ocr, &result.image_path, paddle_kind)?;
@@ -3651,7 +3651,7 @@ fn run_paddle_ocr(
 ) -> Result<OcrResult, String> {
     let mut guard = paddle_ocr
         .lock()
-        .map_err(|_| "PaddleOCR lock poisoned".to_string())?;
+        .map_err(|_| "Python OCR lock poisoned".to_string())?;
     let process = ensure_paddle_ocr_process(&mut guard)?;
     let request = serde_json::to_string(&json!({
         "kind": kind,
@@ -3661,15 +3661,15 @@ fn run_paddle_ocr(
     process
         .stdin
         .write_all(request.as_bytes())
-        .map_err(|err| format!("Could not write PaddleOCR request: {err}"))?;
+        .map_err(|err| format!("Could not write Python OCR request: {err}"))?;
     process
         .stdin
         .write_all(b"\n")
-        .map_err(|err| format!("Could not write PaddleOCR request newline: {err}"))?;
+        .map_err(|err| format!("Could not write Python OCR request newline: {err}"))?;
     process
         .stdin
         .flush()
-        .map_err(|err| format!("Could not flush PaddleOCR request: {err}"))?;
+        .map_err(|err| format!("Could not flush Python OCR request: {err}"))?;
 
     let line = match process.stdout_rx.recv_timeout(StdDuration::from_secs(120)) {
         Ok(line) => line,
@@ -3678,7 +3678,7 @@ fn run_paddle_ocr(
             let _ = process.child.wait();
             *guard = None;
             return Err(
-                "PaddleOCR worker timed out after 120 seconds. First run may be downloading OCR models; check internet access or run tools\\windows\\run-dev.cmd again."
+                "Python OCR worker timed out after 120 seconds. First run may be downloading OCR models; check internet access or run tools\\windows\\run-dev.cmd again."
                     .to_string(),
             );
         }
@@ -3686,8 +3686,8 @@ fn run_paddle_ocr(
             let status = process.child.try_wait().ok().flatten();
             *guard = None;
             return Err(match status {
-                Some(status) => format!("PaddleOCR worker exited before responding: {status}"),
-                None => "PaddleOCR worker stdout closed before responding".to_string(),
+                Some(status) => format!("Python OCR worker exited before responding: {status}"),
+                None => "Python OCR worker stdout closed before responding".to_string(),
             });
         }
     };
@@ -3695,15 +3695,15 @@ fn run_paddle_ocr(
         let status = process.child.try_wait().ok().flatten();
         *guard = None;
         return Err(match status {
-            Some(status) => format!("PaddleOCR worker exited without output: {status}"),
-            None => "PaddleOCR worker returned no output".to_string(),
+            Some(status) => format!("Python OCR worker exited without output: {status}"),
+            None => "Python OCR worker returned no output".to_string(),
         });
     }
 
     let parsed = serde_json::from_str::<PaddleOcrHelperResult>(line.trim())
-        .map_err(|err| format!("Invalid PaddleOCR helper JSON: {err}; output={line}"))?;
+        .map_err(|err| format!("Invalid Python OCR helper JSON: {err}; output={line}"))?;
     if !parsed.ok {
-        return Err(parsed.error.unwrap_or_else(|| "PaddleOCR failed".to_string()));
+        return Err(parsed.error.unwrap_or_else(|| "Python OCR failed".to_string()));
     }
 
     let result = OcrResult {
@@ -3711,7 +3711,7 @@ fn run_paddle_ocr(
         confidence: parsed.confidence,
         engine: parsed
             .engine
-            .unwrap_or_else(|| "paddleocr:auto".to_string()),
+            .unwrap_or_else(|| "ocr:auto".to_string()),
         lines: parsed.lines.unwrap_or_default(),
     };
     eprintln!(
@@ -3739,7 +3739,7 @@ fn ensure_paddle_ocr_process(
     if existing_alive {
         return process
             .as_mut()
-            .ok_or_else(|| "Could not access PaddleOCR worker".to_string());
+            .ok_or_else(|| "Could not access Python OCR worker".to_string());
     }
     *process = None;
 
@@ -3755,14 +3755,14 @@ fn ensure_paddle_ocr_process(
         unix_python_path
     } else if cfg!(target_os = "windows") {
         return Err(format!(
-            "Python OCR environment is missing: {}. Run tools\\windows\\run-dev.cmd so it creates .venv and installs paddleocr.",
+            "Python OCR environment is missing: {}. Run tools\\windows\\run-dev.cmd so it creates .venv and installs OCR dependencies.",
             windows_python_path.display()
         ));
     } else {
         PathBuf::from("python3")
     };
 
-    eprintln!("[paddleocr] starting worker python={} helper={}", python.display(), helper_path.display());
+    eprintln!("[ocr] starting worker python={} helper={}", python.display(), helper_path.display());
     let mut child = Command::new(python)
         .arg(helper_path)
         .arg("--server")
@@ -3771,7 +3771,7 @@ fn ensure_paddle_ocr_process(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|err| format!("Could not start PaddleOCR worker: {err}"))?;
+        .map_err(|err| format!("Could not start Python OCR worker: {err}"))?;
     let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
     if let Some(stderr) = child.stderr.take() {
         spawn_paddle_stderr_forwarder(stderr, ready_tx);
@@ -3779,11 +3779,11 @@ fn ensure_paddle_ocr_process(
     let stdin = child
         .stdin
         .take()
-        .ok_or_else(|| "Could not open PaddleOCR stdin".to_string())?;
+        .ok_or_else(|| "Could not open Python OCR stdin".to_string())?;
     let stdout = child
         .stdout
         .take()
-        .ok_or_else(|| "Could not open PaddleOCR stdout".to_string())?;
+        .ok_or_else(|| "Could not open Python OCR stdout".to_string())?;
     let (stdout_tx, stdout_rx) = mpsc::channel::<String>();
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
@@ -3797,7 +3797,7 @@ fn ensure_paddle_ocr_process(
                 Err(err) => {
                     let _ = stdout_tx.send(json!({
                         "ok": false,
-                        "error": format!("Could not read PaddleOCR stdout: {err}")
+                        "error": format!("Could not read Python OCR stdout: {err}")
                     }).to_string());
                     break;
                 }
@@ -3822,15 +3822,15 @@ fn ensure_paddle_ocr_process(
             let _ = child.kill();
             let _ = child.wait();
             return Err(
-                "PaddleOCR initialization timed out after 60 seconds. It is stuck while loading/downloading OCR models. Check internet access, delete .venv, then run npm run windows:dev again."
+                "Python OCR initialization timed out after 60 seconds. It is stuck while loading/downloading OCR models. Check internet access, delete .venv, then run npm run windows:dev again."
                     .to_string(),
             );
         }
         Err(mpsc::RecvTimeoutError::Disconnected) => {
             let status = child.try_wait().ok().flatten();
             return Err(match status {
-                Some(status) => format!("PaddleOCR worker exited during initialization: {status}"),
-                None => "PaddleOCR worker stderr closed during initialization".to_string(),
+                Some(status) => format!("Python OCR worker exited during initialization: {status}"),
+                None => "Python OCR worker stderr closed during initialization".to_string(),
             });
         }
     }
@@ -3842,7 +3842,7 @@ fn ensure_paddle_ocr_process(
     });
     process
         .as_mut()
-        .ok_or_else(|| "Could not initialize PaddleOCR worker".to_string())
+        .ok_or_else(|| "Could not initialize Python OCR worker".to_string())
 }
 
 fn forward_child_stderr(label: &str, stderr: &[u8]) {
@@ -3880,7 +3880,7 @@ fn spawn_paddle_stderr_forwarder(
                 continue;
             }
 
-            eprintln!("[paddleocr] {trimmed}");
+            eprintln!("[ocr] {trimmed}");
             recent_lines.push(trimmed.to_string());
             if recent_lines.len() > 12 {
                 recent_lines.remove(0);
@@ -3898,7 +3898,7 @@ fn spawn_paddle_stderr_forwarder(
             {
                 ready_sent = true;
                 let _ = ready_tx.send(Err(format!(
-                    "PaddleOCR failed during initialization: {}",
+                    "Python OCR failed during initialization: {}",
                     recent_lines.join(" | ")
                 )));
             }
@@ -3906,7 +3906,7 @@ fn spawn_paddle_stderr_forwarder(
 
         if !ready_sent {
             let _ = ready_tx.send(Err(format!(
-                "PaddleOCR worker stopped before becoming ready: {}",
+                "Python OCR worker stopped before becoming ready: {}",
                 recent_lines.join(" | ")
             )));
         }

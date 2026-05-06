@@ -136,37 +136,21 @@ function Ensure-PythonOcr {
         }
     }
 
-    if (-not (Test-PythonImport $venvPython "paddle")) {
-        Write-Step "Installing PaddlePaddle CPU runtime"
+    if (-not (Test-PythonImport $venvPython "rapidocr_onnxruntime")) {
+        Write-Step "Installing Python OCR dependencies"
         & $venvPython -m pip install --upgrade pip
         if ($LASTEXITCODE -ne 0) {
             throw "Could not upgrade pip in OCR virtualenv"
         }
-        & $venvPython -m pip install paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+        & $venvPython -m pip install rapidocr-onnxruntime
         if ($LASTEXITCODE -ne 0) {
-            throw "Could not install paddlepaddle in OCR virtualenv"
+            throw "Could not install rapidocr-onnxruntime in OCR virtualenv"
         }
-        if (-not (Test-PythonImport $venvPython "paddle")) {
+        if (-not (Test-PythonImport $venvPython "rapidocr_onnxruntime")) {
             if (-not [string]::IsNullOrWhiteSpace($script:LastPythonImportError)) {
                 Write-Host $script:LastPythonImportError -ForegroundColor Red
             }
-            throw "paddlepaddle was installed but cannot be imported from $venvPython"
-        }
-    } else {
-        Write-Host "PaddlePaddle runtime already installed"
-    }
-
-    if (-not (Test-PythonImport $venvPython "paddleocr")) {
-        Write-Step "Installing Python OCR dependencies"
-        & $venvPython -m pip install paddleocr
-        if ($LASTEXITCODE -ne 0) {
-            throw "Could not install paddleocr in OCR virtualenv"
-        }
-        if (-not (Test-PythonImport $venvPython "paddleocr")) {
-            if (-not [string]::IsNullOrWhiteSpace($script:LastPythonImportError)) {
-                Write-Host $script:LastPythonImportError -ForegroundColor Red
-            }
-            throw "paddleocr was installed but cannot be imported from $venvPython"
+            throw "rapidocr-onnxruntime was installed but cannot be imported from $venvPython"
         }
     } else {
         Write-Host "Python OCR dependencies already installed"
@@ -299,7 +283,7 @@ function Stop-StalePaddleOcrWorker {
     $workers = Get-CimInstance Win32_Process -Filter $query -ErrorAction SilentlyContinue
     foreach ($worker in $workers) {
         if ($worker.ProcessId -and $worker.ProcessId -ne $PID) {
-            Write-Host "Stopping stale PaddleOCR worker: PID $($worker.ProcessId)"
+            Write-Host "Stopping stale Python OCR worker: PID $($worker.ProcessId)"
             Stop-Process -Id $worker.ProcessId -Force -ErrorAction SilentlyContinue
         }
     }

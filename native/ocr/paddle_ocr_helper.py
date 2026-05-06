@@ -9,30 +9,44 @@ import time
 os.environ.setdefault("PADDLE_PDX_MODEL_SOURCE", "BOS")
 faulthandler.enable(file=sys.stderr, all_threads=True)
 
-from paddleocr import PaddleOCR
-
 MODEL_NAME = "en_PP-OCRv5_mobile_rec"
 DETECTION_MODEL_NAME = "PP-OCRv5_mobile_det"
 ocr = None
-engine_name = f"paddleocr:{MODEL_NAME}"
+engine_name = "ocr:auto"
+
+def create_rapidocr():
+    from rapidocr_onnxruntime import RapidOCR
+
+    return RapidOCR()
+
+def create_paddleocr(kwargs):
+    from paddleocr import PaddleOCR
+
+    return PaddleOCR(**kwargs)
 
 def initialize_ocr():
     global engine_name
 
     source = os.environ.get("PADDLE_PDX_MODEL_SOURCE")
-    default_attempt = (
+    rapidocr_attempt = (
+        "rapidocr:onnxruntime",
+        lambda: create_rapidocr(),
+        "onnxruntime",
+    )
+    default_paddle_attempt = (
         "paddleocr:en_default",
-        {
+        lambda: create_paddleocr({
             "lang": "en",
             "use_doc_orientation_classify": False,
             "use_doc_unwarping": False,
             "use_textline_orientation": False,
             "text_rec_score_thresh": 0.45,
-        },
+        }),
+        "detection_model=default recognition_model=default",
     )
-    named_model_attempt = (
+    named_paddle_attempt = (
         f"paddleocr:{MODEL_NAME}",
-        {
+        lambda: create_paddleocr({
             "lang": "en",
             "text_detection_model_name": DETECTION_MODEL_NAME,
             "text_recognition_model_name": MODEL_NAME,
@@ -40,43 +54,40 @@ def initialize_ocr():
             "use_doc_unwarping": False,
             "use_textline_orientation": False,
             "text_rec_score_thresh": 0.45,
-        },
+        }),
+        f"detection_model={DETECTION_MODEL_NAME} recognition_model={MODEL_NAME}",
     )
     if sys.platform == "win32":
         print(
-            "[paddleocr] windows detected; using default English models",
+            "[ocr] windows detected; using RapidOCR ONNXRuntime",
             file=sys.stderr,
             flush=True,
         )
-        attempts = [default_attempt]
+        attempts = [rapidocr_attempt]
     else:
-        attempts = [named_model_attempt, default_attempt]
+        attempts = [named_paddle_attempt, default_paddle_attempt]
 
     errors = []
-    for name, kwargs in attempts:
-        model_summary = (
-            f"detection_model={kwargs.get('text_detection_model_name', 'default')} "
-            f"recognition_model={kwargs.get('text_recognition_model_name', 'default')}"
-        )
+    for name, factory, model_summary in attempts:
         print(
-            f"[paddleocr] initializing {model_summary} source={source}",
+            f"[ocr] initializing engine={name} {model_summary} source={source}",
             file=sys.stderr,
             flush=True,
         )
         try:
-            instance = PaddleOCR(**kwargs)
+            instance = factory()
             engine_name = name
-            print(f"[paddleocr] initialized engine={engine_name}", file=sys.stderr, flush=True)
+            print(f"[ocr] initialized engine={engine_name}", file=sys.stderr, flush=True)
             return instance
         except BaseException as exc:
             errors.append(f"{name}: {type(exc).__name__}: {exc}")
             print(
-                f"[paddleocr] init_attempt_failed engine={name} error={type(exc).__name__}: {exc}",
+                f"[ocr] init_attempt_failed engine={name} error={type(exc).__name__}: {exc}",
                 file=sys.stderr,
                 flush=True,
             )
 
-    raise RuntimeError("Could not initialize PaddleOCR: " + " | ".join(errors))
+    raise RuntimeError("Could not initialize OCR: " + " | ".join(errors))
 
 def get_ocr():
     global ocr
@@ -115,13 +126,13 @@ def main():
             get_ocr()
         except BaseException as exc:
             print(
-                f"[paddleocr] init_failed error={type(exc).__name__}: {exc}",
+                f"[ocr] init_failed error={type(exc).__name__}: {exc}",
                 file=sys.stderr,
                 flush=True,
             )
             sys.exit(2)
 
-        print(f"[paddleocr] server_ready engine={engine_name}", file=sys.stderr, flush=True)
+        print(f"[ocr] server_ready engine={engine_name}", file=sys.stderr, flush=True)
         for line in sys.stdin:
             try:
                 request = json.loads(line)
@@ -148,23 +159,8 @@ def main():
 
 def run_ocr(kind: str, image_path: str) -> dict:
     started = time.perf_counter()
-    result = get_ocr().predict(image_path)
+    lines = run_engine(image_path)
     duration_ms = int((time.perf_counter() - started) * 1000)
-
-    lines = []
-
-    for page in result:
-        texts = page.get("rec_texts", [])
-        scores = page.get("rec_scores", [])
-
-        for text, score in zip(texts, scores):
-            text = (text or "").strip()
-            if not text:
-                continue
-            lines.append({
-                "text": text,
-                "confidence": float(score) if score is not None else None
-            })
 
     if kind == "current":
         candidates = [
@@ -188,7 +184,7 @@ def run_ocr(kind: str, image_path: str) -> dict:
         )
 
     print(
-        f"[paddleocr] model={MODEL_NAME} kind={kind} image={image_path} "
+        f"[ocr] engine={engine_name} kind={kind} image={image_path} "
         f"duration_ms={duration_ms} raw_lines={lines}",
         file=sys.stderr,
         flush=True,
@@ -202,6 +198,63 @@ def run_ocr(kind: str, image_path: str) -> dict:
         "lines": lines,
         "duration_ms": duration_ms,
     }
+
+def run_engine(image_path: str) -> list[dict]:
+    engine = get_ocr()
+    if engine_name.startswith("rapidocr:"):
+        result, _ = engine(image_path)
+        if not result:
+            return []
+        lines = []
+        for item in result:
+            if len(item) < 3:
+                continue
+            box, text, score = item[0], item[1], item[2]
+            text = (text or "").strip()
+            if not text:
+                continue
+            line = {
+                "text": text,
+                "confidence": float(score) if score is not None else None
+            }
+            bbox = bbox_from_rapidocr_box(box)
+            if bbox is not None:
+                line["bbox"] = bbox
+            lines.append(line)
+        return lines
+
+    result = engine.predict(image_path)
+    lines = []
+
+    for page in result:
+        texts = page.get("rec_texts", [])
+        scores = page.get("rec_scores", [])
+
+        for text, score in zip(texts, scores):
+            text = (text or "").strip()
+            if not text:
+                continue
+            lines.append({
+                "text": text,
+                "confidence": float(score) if score is not None else None
+            })
+
+    return lines
+
+def bbox_from_rapidocr_box(box):
+    try:
+        xs = [float(point[0]) for point in box]
+        ys = [float(point[1]) for point in box]
+        left = min(xs)
+        top = min(ys)
+        return {
+            "x": left,
+            "y": top,
+            "width": max(xs) - left,
+            "height": max(ys) - top,
+        }
+    except Exception:
+        return None
 
 if __name__ == "__main__":
     main()
