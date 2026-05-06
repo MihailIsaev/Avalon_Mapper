@@ -20,30 +20,37 @@ def initialize_ocr():
     global engine_name
 
     source = os.environ.get("PADDLE_PDX_MODEL_SOURCE")
-    attempts = [
-        (
-            f"paddleocr:{MODEL_NAME}",
-            {
-                "lang": "en",
-                "text_detection_model_name": DETECTION_MODEL_NAME,
-                "text_recognition_model_name": MODEL_NAME,
-                "use_doc_orientation_classify": False,
-                "use_doc_unwarping": False,
-                "use_textline_orientation": False,
-                "text_rec_score_thresh": 0.45,
-            },
-        ),
-        (
-            "paddleocr:en_default",
-            {
-                "lang": "en",
-                "use_doc_orientation_classify": False,
-                "use_doc_unwarping": False,
-                "use_textline_orientation": False,
-                "text_rec_score_thresh": 0.45,
-            },
-        ),
-    ]
+    default_attempt = (
+        "paddleocr:en_default",
+        {
+            "lang": "en",
+            "use_doc_orientation_classify": False,
+            "use_doc_unwarping": False,
+            "use_textline_orientation": False,
+            "text_rec_score_thresh": 0.45,
+        },
+    )
+    named_model_attempt = (
+        f"paddleocr:{MODEL_NAME}",
+        {
+            "lang": "en",
+            "text_detection_model_name": DETECTION_MODEL_NAME,
+            "text_recognition_model_name": MODEL_NAME,
+            "use_doc_orientation_classify": False,
+            "use_doc_unwarping": False,
+            "use_textline_orientation": False,
+            "text_rec_score_thresh": 0.45,
+        },
+    )
+    if sys.platform == "win32":
+        print(
+            "[paddleocr] windows detected; using default English models",
+            file=sys.stderr,
+            flush=True,
+        )
+        attempts = [default_attempt]
+    else:
+        attempts = [named_model_attempt, default_attempt]
 
     errors = []
     for name, kwargs in attempts:

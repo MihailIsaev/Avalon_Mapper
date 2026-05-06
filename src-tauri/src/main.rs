@@ -2561,7 +2561,7 @@ fn build_map_overlay_data_from_conn(conn: &Connection) -> Result<MapOverlayData,
         last_capture_status: get_setting(&conn, "last_capture_status")?
             .unwrap_or_else(|| "No captures yet".to_string()),
         capture_mode: "macOS CGWindowList capture".to_string(),
-        ocr_mode: "paddleocr:en_PP-OCRv5_mobile_rec".to_string(),
+        ocr_mode: "paddleocr:auto".to_string(),
         db_status: "SQLite connected".to_string(),
         known_locations_count,
         known_edges_count,
@@ -3711,7 +3711,7 @@ fn run_paddle_ocr(
         confidence: parsed.confidence,
         engine: parsed
             .engine
-            .unwrap_or_else(|| "paddleocr:en_PP-OCRv5_mobile_rec".to_string()),
+            .unwrap_or_else(|| "paddleocr:auto".to_string()),
         lines: parsed.lines.unwrap_or_default(),
     };
     eprintln!(
