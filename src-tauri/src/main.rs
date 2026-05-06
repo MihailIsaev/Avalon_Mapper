@@ -328,23 +328,23 @@ impl WindowsHotkeyManager {
                         }
                         2 => {
                             eprintln!("[windows-hotkey] capture current location");
-                            let _ = handle_hotkey_capture(
-                                &db_path,
-                                &helper_path,
-                                &capture_dir,
-                                &overlay,
-                                &paddle_ocr,
+                            spawn_hotkey_capture(
+                                db_path.clone(),
+                                helper_path.clone(),
+                                capture_dir.clone(),
+                                Arc::clone(&overlay),
+                                Arc::clone(&paddle_ocr),
                                 "current_location",
                             );
                         }
                         3 => {
                             eprintln!("[windows-hotkey] capture portal");
-                            let _ = handle_hotkey_capture(
-                                &db_path,
-                                &helper_path,
-                                &capture_dir,
-                                &overlay,
-                                &paddle_ocr,
+                            spawn_hotkey_capture(
+                                db_path.clone(),
+                                helper_path.clone(),
+                                capture_dir.clone(),
+                                Arc::clone(&overlay),
+                                Arc::clone(&paddle_ocr),
                                 "portal",
                             );
                         }
@@ -2504,22 +2504,22 @@ fn spawn_map_overlay_stdout_reader(
                         eprintln!("[overlay-hotkey] registration failed: {value}");
                     }
                     "capture_current" => {
-                        let _ = handle_hotkey_capture(
-                            &db_path,
-                            &helper_path,
-                            &capture_dir,
-                            &overlay,
-                            &paddle_ocr,
+                        spawn_hotkey_capture(
+                            db_path.clone(),
+                            helper_path.clone(),
+                            capture_dir.clone(),
+                            Arc::clone(&overlay),
+                            Arc::clone(&paddle_ocr),
                             "current_location",
                         );
                     }
                     "capture_portal" => {
-                        let _ = handle_hotkey_capture(
-                            &db_path,
-                            &helper_path,
-                            &capture_dir,
-                            &overlay,
-                            &paddle_ocr,
+                        spawn_hotkey_capture(
+                            db_path.clone(),
+                            helper_path.clone(),
+                            capture_dir.clone(),
+                            Arc::clone(&overlay),
+                            Arc::clone(&paddle_ocr),
                             "portal",
                         );
                     }
@@ -3451,6 +3451,28 @@ fn apply_portal_capture(
     })
 }
 
+fn spawn_hotkey_capture(
+    db_path: PathBuf,
+    helper_path: PathBuf,
+    capture_dir: PathBuf,
+    overlay: Arc<Mutex<Option<MapOverlayProcess>>>,
+    paddle_ocr: Arc<Mutex<Option<PaddleOcrProcess>>>,
+    kind: &'static str,
+) {
+    thread::spawn(move || {
+        if let Err(err) = handle_hotkey_capture(
+            &db_path,
+            &helper_path,
+            &capture_dir,
+            &overlay,
+            &paddle_ocr,
+            kind,
+        ) {
+            eprintln!("[capture-hotkey] {kind} capture failed: {err}");
+        }
+    });
+}
+
 fn handle_hotkey_capture(
     db_path: &Path,
     helper_path: &Path,
@@ -3477,6 +3499,10 @@ fn handle_hotkey_capture(
         "[capture-hotkey] region key={region_key} x={} y={} width={} height={}",
         region.x, region.y, region.width, region.height
     );
+    let _ = set_setting(&conn, "last_capture_status", &format!("{kind} capture running"));
+    if let Ok(data) = build_map_overlay_data_from_conn(&conn) {
+        let _ = send_map_overlay_command_direct(overlay, json!({ "type": "data", "data": data }));
+    }
     let started = Instant::now();
     let portal_anchor = if kind == "portal" { region.anchor_x.zip(region.anchor_y) } else { None };
     let center_cursor = if kind == "portal" { portal_anchor.is_none() } else { false };
@@ -3566,6 +3592,10 @@ fn run_capture_ocr_with_helper(
     if let Some(display_id) = &region.display_id {
         command.arg("--display-id").arg(display_id);
     }
+    eprintln!(
+        "[capture] running helper kind={kind} region={}x{} at {},{}",
+        region.width, region.height, region.x, region.y
+    );
     let output = command
         .output()
         .map_err(|err| format!("Could not run capture helper: {err}"))?;
@@ -3586,7 +3616,12 @@ fn run_capture_ocr_with_helper(
                 .to_string(),
         );
     }
-    let paddle = run_paddle_ocr(paddle_ocr, &result.image_path, kind)?;
+    let paddle_kind = if kind == "current_location" { "current" } else { kind };
+    eprintln!(
+        "[capture] running paddleocr kind={paddle_kind} image={}",
+        result.image_path
+    );
+    let paddle = run_paddle_ocr(paddle_ocr, &result.image_path, paddle_kind)?;
     eprintln!(
         "[capture] kind={kind} image={} size={}x{} capture_ms={} ocr_engine={} ocr_confidence={:?}",
         result.image_path,
@@ -5851,12 +5886,23 @@ fn match_current_location(cleaned_candidate: &str, primary: &[String]) -> Curren
         .into_iter()
         .filter(|token| token.chars().any(|ch| ch.is_alphabetic()))
         .collect::<Vec<_>>();
+    let candidate_tokens = tokens(&normalize_location_name(&best_candidate.name))
+        .into_iter()
+        .filter(|token| token.chars().any(|ch| ch.is_alphabetic()))
+        .collect::<Vec<_>>();
     let has_multi_word_candidate = alpha_words.len() >= 2;
     let exact_match = query == normalize_location_name(&best_candidate.name);
+    let avalon_compound_match = has_multi_word_candidate
+        && best_candidate.name.contains('-')
+        && alpha_words.len() == candidate_tokens.len()
+        && same_token_initials_score(&alpha_words, &candidate_tokens) >= 1.0
+        && token_prefix_similarity(&alpha_words, &candidate_tokens) >= 0.30
+        && best_candidate.score >= 0.45;
     let strong_match = if alpha_words.len() == 1 && !exact_match {
         false
     } else {
-        best_candidate.score >= 0.88
+        avalon_compound_match
+            || best_candidate.score >= 0.88
             && (!has_multi_word_candidate
                 || !best_candidate.name.contains('-')
                 || query.contains('-')
