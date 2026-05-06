@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicUsize, Ordering},
         mpsc, Arc, Mutex, OnceLock,
     },
     thread,
@@ -719,26 +719,39 @@ struct RouteOverlayEdge {
 }
 
 static PRIMARY_LOCATION_DICTIONARY: OnceLock<Vec<String>> = OnceLock::new();
-static HOTKEY_CAPTURE_BUSY: AtomicBool = AtomicBool::new(false);
+static HOTKEY_CAPTURE_PENDING: AtomicUsize = AtomicUsize::new(0);
+const MAX_HOTKEY_CAPTURE_QUEUE: usize = 8;
 
 struct HotkeyCaptureGuard;
 
 impl HotkeyCaptureGuard {
     fn try_acquire() -> Option<Self> {
-        if HOTKEY_CAPTURE_BUSY
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
-        {
-            Some(Self)
-        } else {
-            None
+        let mut current = HOTKEY_CAPTURE_PENDING.load(Ordering::SeqCst);
+        loop {
+            if current >= MAX_HOTKEY_CAPTURE_QUEUE {
+                return None;
+            }
+
+            match HOTKEY_CAPTURE_PENDING.compare_exchange(
+                current,
+                current + 1,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => return Some(Self),
+                Err(actual) => current = actual,
+            }
         }
+    }
+
+    fn pending_count() -> usize {
+        HOTKEY_CAPTURE_PENDING.load(Ordering::SeqCst)
     }
 }
 
 impl Drop for HotkeyCaptureGuard {
     fn drop(&mut self) {
-        HOTKEY_CAPTURE_BUSY.store(false, Ordering::SeqCst);
+        HOTKEY_CAPTURE_PENDING.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -3482,10 +3495,15 @@ fn handle_hotkey_capture(
     kind: &str,
 ) -> Result<(), String> {
     let Some(_capture_guard) = HotkeyCaptureGuard::try_acquire() else {
-        eprintln!("[capture-hotkey] ignoring {kind} capture because another hotkey capture is still running");
+        eprintln!(
+            "[capture-hotkey] ignoring {kind} capture because capture queue is full ({MAX_HOTKEY_CAPTURE_QUEUE})"
+        );
         return Ok(());
     };
-    eprintln!("[capture-hotkey] {kind} capture requested from overlay hotkey");
+    eprintln!(
+        "[capture-hotkey] {kind} capture requested from overlay hotkey pending={}",
+        HotkeyCaptureGuard::pending_count()
+    );
     let mut conn = Connection::open(db_path).map_err(db_err)?;
     initialize_schema(&conn).map_err(db_err)?;
     let region_key = if kind == "portal" {
