@@ -294,6 +294,17 @@ function Stop-StaleOverlayHelper {
     }
 }
 
+function Stop-StalePaddleOcrWorker {
+    $query = "CommandLine LIKE '%paddle_ocr_helper.py%'"
+    $workers = Get-CimInstance Win32_Process -Filter $query -ErrorAction SilentlyContinue
+    foreach ($worker in $workers) {
+        if ($worker.ProcessId -and $worker.ProcessId -ne $PID) {
+            Write-Host "Stopping stale PaddleOCR worker: PID $($worker.ProcessId)"
+            Stop-Process -Id $worker.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Wait-FileWritable($PathValue, $TimeoutSeconds = 10) {
     if (-not (Test-Path $PathValue)) {
         return
@@ -382,6 +393,7 @@ $hostArch = Get-HostArch
 $dotnetRuntime = Get-DotnetRuntime $hostArch
 
 Write-Step "Preparing Avalon Mapper Windows dev environment ($hostArch)"
+Stop-StalePaddleOcrWorker
 Ensure-Node
 Ensure-Dotnet
 Ensure-PythonOcr
@@ -424,4 +436,10 @@ if ($Mode -eq "setup") {
 Write-Step "Starting Avalon Mapper"
 Stop-Port1420
 Stop-StaleOverlayHelper
-Invoke-InVs $devCmd $hostArch "cd /d `"$repoRoot`" && npm.cmd run dev"
+try {
+    Invoke-InVs $devCmd $hostArch "cd /d `"$repoRoot`" && npm.cmd run dev"
+}
+finally {
+    Stop-StaleOverlayHelper
+    Stop-StalePaddleOcrWorker
+}

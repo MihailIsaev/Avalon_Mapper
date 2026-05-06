@@ -252,6 +252,16 @@ struct PaddleOcrProcess {
     stdout_rx: mpsc::Receiver<String>,
 }
 
+impl Drop for PaddleOcrProcess {
+    fn drop(&mut self) {
+        if matches!(self.child.try_wait(), Ok(None)) {
+            eprintln!("[paddleocr] stopping worker pid={}", self.child.id());
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+}
+
 #[cfg(target_os = "windows")]
 struct WindowsHotkeyManager {
     sender: mpsc::Sender<WindowsHotkeyCommand>,
@@ -3727,8 +3737,9 @@ fn ensure_paddle_ocr_process(
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|err| format!("Could not start PaddleOCR worker: {err}"))?;
+    let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
     if let Some(stderr) = child.stderr.take() {
-        spawn_stderr_forwarder("paddleocr", stderr);
+        spawn_paddle_stderr_forwarder(stderr, ready_tx);
     }
     let stdin = child
         .stdin
@@ -3759,6 +3770,30 @@ fn ensure_paddle_ocr_process(
         }
     });
 
+    match ready_rx.recv_timeout(StdDuration::from_secs(60)) {
+        Ok(Ok(())) => {}
+        Ok(Err(err)) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(err);
+        }
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(
+                "PaddleOCR initialization timed out after 60 seconds. It is stuck while loading/downloading OCR models. Check internet access, delete .venv, then run npm run windows:dev again."
+                    .to_string(),
+            );
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            let status = child.try_wait().ok().flatten();
+            return Err(match status {
+                Some(status) => format!("PaddleOCR worker exited during initialization: {status}"),
+                None => "PaddleOCR worker stderr closed during initialization".to_string(),
+            });
+        }
+    }
+
     *process = Some(PaddleOcrProcess {
         child,
         stdin,
@@ -3786,6 +3821,49 @@ fn spawn_stderr_forwarder(label: &'static str, stderr: std::process::ChildStderr
             if !line.trim().is_empty() {
                 eprintln!("[{label}] {line}");
             }
+        }
+    });
+}
+
+fn spawn_paddle_stderr_forwarder(
+    stderr: std::process::ChildStderr,
+    ready_tx: mpsc::Sender<Result<(), String>>,
+) {
+    thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        let mut ready_sent = false;
+        let mut recent_lines = Vec::<String>::new();
+        for line in reader.lines().map_while(Result::ok) {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            eprintln!("[paddleocr] {trimmed}");
+            recent_lines.push(trimmed.to_string());
+            if recent_lines.len() > 12 {
+                recent_lines.remove(0);
+            }
+
+            if !ready_sent && trimmed.contains("server_ready") {
+                ready_sent = true;
+                let _ = ready_tx.send(Ok(()));
+            }
+
+            if !ready_sent && trimmed.contains("Traceback") {
+                ready_sent = true;
+                let _ = ready_tx.send(Err(format!(
+                    "PaddleOCR failed during initialization: {}",
+                    recent_lines.join(" | ")
+                )));
+            }
+        }
+
+        if !ready_sent {
+            let _ = ready_tx.send(Err(format!(
+                "PaddleOCR worker stopped before becoming ready: {}",
+                recent_lines.join(" | ")
+            )));
         }
     });
 }
