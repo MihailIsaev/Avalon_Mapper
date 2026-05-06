@@ -586,9 +586,9 @@ internal sealed class MapOverlayForm : Form
         g.FillRoundedRectangle(graphBrush, rect, 6);
         g.DrawRoundedRectangle(graphPen, rect, 6);
 
-        var locations = data.Locations.OrderBy(location => location.Id).ToList();
+        var locations = GraphLocations(data);
         _nodeRects.Clear();
-        if (locations.Count == 0)
+        if (locations.Count == 0 && data.RouteLocations.Count == 0 && data.BridgeLocations.Count == 0)
         {
             using var font = new Font("Segoe UI", 9);
             using var brush = new SolidBrush(Color.FromArgb(150, Color.White));
@@ -708,7 +708,7 @@ internal sealed class MapOverlayForm : Form
 
     private static Dictionary<int, PointF> LayoutLocations(MapOverlayData data, RectangleF rect, float zoom, PointF pan)
     {
-        var locations = data.Locations.OrderBy(location => location.Id).ToList();
+        var locations = GraphLocations(data);
         var rawPositions = new Dictionary<int, PointF>();
         for (var i = 0; i < locations.Count; i++)
         {
@@ -728,22 +728,38 @@ internal sealed class MapOverlayForm : Form
 
         foreach (var location in data.RouteLocations)
         {
-            if (rawPositions.ContainsKey(location.Id) || !location.X.HasValue || !location.Y.HasValue)
+            if (rawPositions.ContainsKey(location.Id))
             {
                 continue;
             }
 
-            rawPositions[location.Id] = new PointF((float)location.X.Value, (float)location.Y.Value + 220f);
+            if (location.X.HasValue && location.Y.HasValue)
+            {
+                rawPositions[location.Id] = new PointF((float)location.X.Value, (float)location.Y.Value + 220f);
+            }
+            else
+            {
+                var index = rawPositions.Count;
+                rawPositions[location.Id] = new PointF(index * 140f, 220f);
+            }
         }
 
         foreach (var location in data.BridgeLocations)
         {
-            if (rawPositions.ContainsKey(location.Id) || !location.X.HasValue || !location.Y.HasValue)
+            if (rawPositions.ContainsKey(location.Id))
             {
                 continue;
             }
 
-            rawPositions[location.Id] = new PointF((float)location.X.Value, (float)location.Y.Value);
+            if (location.X.HasValue && location.Y.HasValue)
+            {
+                rawPositions[location.Id] = new PointF((float)location.X.Value, (float)location.Y.Value);
+            }
+            else
+            {
+                var index = rawPositions.Count;
+                rawPositions[location.Id] = new PointF(index * 140f, 0f);
+            }
         }
 
         if (rawPositions.Count == 0)
@@ -772,6 +788,13 @@ internal sealed class MapOverlayForm : Form
             pair => new PointF(
                 offsetX + (pair.Value.X - minX) * scale + pan.X,
                 offsetY + (pair.Value.Y - minY) * scale + pan.Y));
+    }
+
+    private static List<MapLocation> GraphLocations(MapOverlayData data)
+    {
+        return data.Locations.Count > 0
+            ? data.Locations.OrderBy(location => location.Id).ToList()
+            : data.RouteLocations.OrderBy(location => location.Id).ToList();
     }
 
     private void DrawControls(Graphics g, MapOverlayData data)
