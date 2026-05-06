@@ -5397,12 +5397,42 @@ fn ocr_candidate_lines(raw_text: &str, ocr_lines: &[OcrLine]) -> Vec<String> {
         });
         lines.into_iter().map(|line| line.text).collect()
     };
+    if !ocr_lines.is_empty() {
+        let joined = joined_current_location_ocr_lines(ocr_lines);
+        if !joined.is_empty() {
+            lines.push(joined);
+        }
+    }
     lines.extend(raw_text.lines().map(|line| line.to_string()));
     lines
         .into_iter()
         .map(|line| line.trim().to_string())
         .filter(|line| !line.is_empty())
         .collect()
+}
+
+fn joined_current_location_ocr_lines(ocr_lines: &[OcrLine]) -> String {
+    let mut lines = ocr_lines.to_vec();
+    lines.sort_by(|left, right| {
+        let left_y = left.bbox.as_ref().map(|bbox| bbox.y).unwrap_or(0.0);
+        let right_y = right.bbox.as_ref().map(|bbox| bbox.y).unwrap_or(0.0);
+        let left_x = left.bbox.as_ref().map(|bbox| bbox.x).unwrap_or(0.0);
+        let right_x = right.bbox.as_ref().map(|bbox| bbox.x).unwrap_or(0.0);
+        left_y
+            .partial_cmp(&right_y)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                left_x
+                    .partial_cmp(&right_x)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    });
+
+    lines
+        .into_iter()
+        .map(|line| line.text)
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn clean_current_location_candidate(line: &str) -> String {
@@ -6475,6 +6505,40 @@ mod tests {
     fn parses_current_location_combined_plaque() {
         let parsed = parse_current_location_ocr("6 IV Blackthorn Quarry 01:31", &[], &known());
         assert_eq!(parsed.location_name.as_deref(), Some("Blackthorn Quarry"));
+    }
+
+    #[test]
+    fn parses_current_location_split_rapidocr_words() {
+        let lines = vec![
+            OcrLine {
+                text: "&0".to_string(),
+                confidence: Some(0.66),
+                bbox: Some(OcrBbox { x: 17.0, y: 9.0, width: 57.0, height: 29.0 }),
+            },
+            OcrLine {
+                text: "V".to_string(),
+                confidence: Some(0.89),
+                bbox: Some(OcrBbox { x: 158.0, y: 12.0, width: 23.0, height: 25.0 }),
+            },
+            OcrLine {
+                text: "Eldon".to_string(),
+                confidence: Some(0.98),
+                bbox: Some(OcrBbox { x: 233.0, y: 12.0, width: 77.0, height: 26.0 }),
+            },
+            OcrLine {
+                text: "Hill".to_string(),
+                confidence: Some(0.95),
+                bbox: Some(OcrBbox { x: 313.0, y: 13.0, width: 47.0, height: 24.0 }),
+            },
+            OcrLine {
+                text: "21:49".to_string(),
+                confidence: Some(0.99),
+                bbox: Some(OcrBbox { x: 395.0, y: 13.0, width: 75.0, height: 24.0 }),
+            },
+        ];
+        let parsed = parse_current_location_ocr("Eldon", &lines, &known());
+        assert_eq!(parsed.location_name.as_deref(), Some("Eldon Hill"));
+        assert_eq!(parsed.used_dictionary_match, true);
     }
 
     #[test]

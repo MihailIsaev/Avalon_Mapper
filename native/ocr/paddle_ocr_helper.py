@@ -163,19 +163,7 @@ def run_ocr(kind: str, image_path: str) -> dict:
     duration_ms = int((time.perf_counter() - started) * 1000)
 
     if kind == "current":
-        candidates = [
-            line for line in lines
-            if not is_bad_current_location_line(line["text"])
-            and (line["confidence"] is None or line["confidence"] >= 0.45)
-        ]
-
-        if candidates:
-            best = max(candidates, key=lambda x: x["confidence"] or 0.0)
-            parsed_text = best["text"]
-            parsed_confidence = best["confidence"]
-        else:
-            parsed_text = ""
-            parsed_confidence = None
+        parsed_text, parsed_confidence = select_current_location_text(lines)
     else:
         parsed_text = "\n".join(line["text"] for line in lines if line["text"])
         parsed_confidence = max(
@@ -198,6 +186,30 @@ def run_ocr(kind: str, image_path: str) -> dict:
         "lines": lines,
         "duration_ms": duration_ms,
     }
+
+def select_current_location_text(lines: list[dict]) -> tuple[str, float | None]:
+    candidates = [
+        line for line in sorted_current_location_lines(lines)
+        if not is_bad_current_location_line(line["text"])
+        and (line["confidence"] is None or line["confidence"] >= 0.45)
+    ]
+
+    if not candidates:
+        return "", None
+
+    text = " ".join(line["text"].strip() for line in candidates if line["text"].strip())
+    scores = [line["confidence"] for line in candidates if line["confidence"] is not None]
+    confidence = min(scores) if scores else None
+    return text, confidence
+
+def sorted_current_location_lines(lines: list[dict]) -> list[dict]:
+    return sorted(
+        lines,
+        key=lambda line: (
+            line.get("bbox", {}).get("y", 0.0),
+            line.get("bbox", {}).get("x", 0.0),
+        ),
+    )
 
 def run_engine(image_path: str) -> list[dict]:
     engine = get_ocr()
