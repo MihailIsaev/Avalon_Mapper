@@ -3767,6 +3767,7 @@ fn ensure_paddle_ocr_process(
         .arg(helper_path)
         .arg("--server")
         .env("PADDLE_PDX_MODEL_SOURCE", "BOS")
+        .env("PYTHONIOENCODING", "utf-8")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -3786,10 +3787,17 @@ fn ensure_paddle_ocr_process(
         .ok_or_else(|| "Could not open Python OCR stdout".to_string())?;
     let (stdout_tx, stdout_rx) = mpsc::channel::<String>();
     thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            match line {
-                Ok(line) => {
+        let mut reader = BufReader::new(stdout);
+        let mut buffer = Vec::new();
+        loop {
+            buffer.clear();
+            match reader.read_until(b'\n', &mut buffer) {
+                Ok(0) => break,
+                Ok(_) => {
+                    while matches!(buffer.last(), Some(b'\n' | b'\r')) {
+                        buffer.pop();
+                    }
+                    let line = String::from_utf8_lossy(&buffer).to_string();
                     if stdout_tx.send(line).is_err() {
                         break;
                     }
@@ -3871,10 +3879,24 @@ fn spawn_paddle_stderr_forwarder(
     ready_tx: mpsc::Sender<Result<(), String>>,
 ) {
     thread::spawn(move || {
-        let reader = BufReader::new(stderr);
+        let mut reader = BufReader::new(stderr);
         let mut ready_sent = false;
         let mut recent_lines = Vec::<String>::new();
-        for line in reader.lines().map_while(Result::ok) {
+        let mut buffer = Vec::new();
+        loop {
+            buffer.clear();
+            let read = match reader.read_until(b'\n', &mut buffer) {
+                Ok(0) => break,
+                Ok(read) => read,
+                Err(_) => break,
+            };
+            if read == 0 {
+                break;
+            }
+            while matches!(buffer.last(), Some(b'\n' | b'\r')) {
+                buffer.pop();
+            }
+            let line = String::from_utf8_lossy(&buffer);
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 continue;

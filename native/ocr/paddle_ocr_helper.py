@@ -8,6 +8,10 @@ import time
 
 os.environ.setdefault("PADDLE_PDX_MODEL_SOURCE", "BOS")
 faulthandler.enable(file=sys.stderr, all_threads=True)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
 
 MODEL_NAME = "en_PP-OCRv5_mobile_rec"
 DETECTION_MODEL_NAME = "PP-OCRv5_mobile_det"
@@ -138,7 +142,7 @@ def main():
                 request = json.loads(line)
                 kind = request.get("kind", "current")
                 image_path = request["image_path"]
-                print(json.dumps(run_ocr(kind, image_path), ensure_ascii=False), flush=True)
+                print(json.dumps(run_ocr(kind, image_path)), flush=True)
             except Exception as exc:
                 print(json.dumps({
                     "ok": False,
@@ -155,7 +159,7 @@ def main():
 
     kind = sys.argv[1]
     image_path = sys.argv[2]
-    print(json.dumps(run_ocr(kind, image_path), ensure_ascii=False))
+    print(json.dumps(run_ocr(kind, image_path)))
 
 def run_ocr(kind: str, image_path: str) -> dict:
     started = time.perf_counter()
