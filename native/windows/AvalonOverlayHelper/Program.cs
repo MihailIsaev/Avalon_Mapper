@@ -586,19 +586,19 @@ internal sealed class MapOverlayForm : Form
         g.FillRoundedRectangle(graphBrush, rect, 6);
         g.DrawRoundedRectangle(graphPen, rect, 6);
 
-        var locations = data.Locations.Count > 0 ? data.Locations : data.RouteLocations;
+        var locations = data.Locations.OrderBy(location => location.Id).ToList();
         _nodeRects.Clear();
         if (locations.Count == 0)
         {
             using var font = new Font("Segoe UI", 9);
             using var brush = new SolidBrush(Color.FromArgb(150, Color.White));
-            g.DrawString("Waiting for map data", font, brush, rect.Left + 12, rect.Top + 12);
+            g.DrawString("No graph data", font, brush, rect.Left + 12, rect.Top + 12);
             return;
         }
 
         var graphState = g.Save();
         g.SetClip(rect);
-        var points = LayoutLocations(locations, rect, _mapZoom, _mapPan);
+        var points = LayoutLocations(data, rect, _mapZoom, _mapPan);
         var routeEdgeIds = data.RouteEdges.Select(e => e.Id).ToHashSet();
         var routePairs = data.RouteEdges.Select(e => PairKey(e.FromLocationId, e.ToLocationId)).ToHashSet();
 
@@ -610,7 +610,21 @@ internal sealed class MapOverlayForm : Form
             }
 
             var highlighted = routeEdgeIds.Contains(edge.Id) || routePairs.Contains(PairKey(edge.FromLocationId, edge.ToLocationId));
-            using var pen = new Pen(highlighted ? Color.FromArgb(240, 250, 204, 21) : Color.FromArgb(85, 148, 163, 184), highlighted ? 3f : 1.25f);
+            var color = highlighted
+                ? Color.FromArgb(242, 249, 115, 22)
+                : EdgeColor(edge);
+            using var pen = new Pen(color, highlighted ? 3f : edge.Source == "traversed" ? 2.4f : 1.4f);
+            g.DrawLine(pen, from, to);
+        }
+
+        foreach (var edge in data.BridgeEdges)
+        {
+            if (!points.TryGetValue(edge.FromLocationId, out var from) || !points.TryGetValue(edge.ToLocationId, out var to))
+            {
+                continue;
+            }
+
+            using var pen = new Pen(Color.FromArgb(72, Color.White), 1.2f);
             g.DrawLine(pen, from, to);
         }
 
@@ -634,12 +648,13 @@ internal sealed class MapOverlayForm : Form
             }
 
             var selected = _selectedLocationId == location.Id;
-            var radius = selected ? 6.5f : 5f;
+            var current = string.Equals(location.Name, data.CurrentLocation, StringComparison.OrdinalIgnoreCase);
+            var radius = selected ? 8f : current ? 6.5f : 5.5f;
             var nodeRect = new RectangleF(point.X - radius, point.Y - radius, radius * 2, radius * 2);
-            _nodeRects.Add((location.Id, nodeRect));
+            _nodeRects.Add((location.Id, Inflate(nodeRect, 8f)));
 
             using var fill = new SolidBrush(NodeColor(location, data.CurrentLocation));
-            using var outline = new Pen(selected ? Color.White : Color.FromArgb(210, 15, 23, 42), selected ? 2f : 1f);
+            using var outline = new Pen(Color.FromArgb(current || selected ? 242 : 115, Color.White), selected ? 3f : current ? 2f : 1f);
             g.FillEllipse(fill, nodeRect);
             g.DrawEllipse(outline, nodeRect);
 
@@ -649,59 +664,114 @@ internal sealed class MapOverlayForm : Form
                 g.DrawString(TrimTo(location.Name, 18), nameFont, text, point.X + 8, point.Y - 8);
             }
         }
+
+        foreach (var location in data.BridgeLocations)
+        {
+            if (!points.TryGetValue(location.Id, out var point))
+            {
+                continue;
+            }
+
+            var radius = 4.5f;
+            var nodeRect = new RectangleF(point.X - radius, point.Y - radius, radius * 2, radius * 2);
+            _nodeRects.Add((location.Id, Inflate(nodeRect, 8f)));
+
+            using var fill = new SolidBrush(WithAlpha(NodeColor(location, null), 184));
+            using var outline = new Pen(Color.FromArgb(107, Color.White), 1.2f);
+            g.FillEllipse(fill, nodeRect);
+            g.DrawEllipse(outline, nodeRect);
+        }
+
+        foreach (var location in data.RouteLocations)
+        {
+            if (!points.TryGetValue(location.Id, out var point))
+            {
+                continue;
+            }
+
+            var alreadyExists = data.Locations.Any(existing => existing.Id == location.Id);
+            var radius = alreadyExists ? 9f : 7f;
+            var nodeRect = new RectangleF(point.X - radius, point.Y - radius, radius * 2, radius * 2);
+            _nodeRects.Add((location.Id, Inflate(nodeRect, 8f)));
+
+            if (!alreadyExists)
+            {
+                using var fill = new SolidBrush(NodeColor(location, null));
+                g.FillEllipse(fill, nodeRect);
+            }
+
+            using var outline = new Pen(Color.FromArgb(245, 249, 115, 22), alreadyExists ? 3.5f : 2.5f);
+            g.DrawEllipse(outline, nodeRect);
+        }
         g.Restore(graphState);
     }
 
-    private static Dictionary<int, PointF> LayoutLocations(IReadOnlyList<MapLocation> locations, RectangleF rect, float zoom, PointF pan)
+    private static Dictionary<int, PointF> LayoutLocations(MapOverlayData data, RectangleF rect, float zoom, PointF pan)
     {
-        var withCoordinates = locations.Where(l => l.X.HasValue && l.Y.HasValue).ToList();
-        var points = new Dictionary<int, PointF>();
-        if (withCoordinates.Count >= Math.Max(2, locations.Count / 2))
+        var locations = data.Locations.OrderBy(location => location.Id).ToList();
+        var rawPositions = new Dictionary<int, PointF>();
+        for (var i = 0; i < locations.Count; i++)
         {
-            var minX = withCoordinates.Min(l => l.X!.Value);
-            var maxX = withCoordinates.Max(l => l.X!.Value);
-            var minY = withCoordinates.Min(l => l.Y!.Value);
-            var maxY = withCoordinates.Max(l => l.Y!.Value);
-            var spanX = Math.Max(1, maxX - minX);
-            var spanY = Math.Max(1, maxY - minY);
-            foreach (var location in locations)
+            var location = locations[i];
+            if (location.X.HasValue && location.Y.HasValue)
             {
-                if (location.X.HasValue && location.Y.HasValue)
-                {
-                    var x = rect.Left + 18 + (float)((location.X.Value - minX) / spanX) * (rect.Width - 36);
-                    var y = rect.Top + 18 + (float)((location.Y.Value - minY) / spanY) * (rect.Height - 36);
-                    points[location.Id] = new PointF(x, y);
-                }
+                rawPositions[location.Id] = new PointF((float)location.X.Value, (float)location.Y.Value);
+            }
+            else
+            {
+                var columns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(Math.Max(1, locations.Count))));
+                var col = i % columns;
+                var row = i / columns;
+                rawPositions[location.Id] = new PointF(col * 140f, row * 140f);
             }
         }
 
-        var missing = locations.Where(l => !points.ContainsKey(l.Id)).ToList();
-        for (var i = 0; i < missing.Count; i++)
+        foreach (var location in data.RouteLocations)
         {
-            var angle = Math.PI * 2 * i / Math.Max(1, missing.Count);
-            var radiusX = Math.Max(20, rect.Width / 2 - 26);
-            var radiusY = Math.Max(20, rect.Height / 2 - 26);
-            points[missing[i].Id] = new PointF(
-                rect.Left + rect.Width / 2 + (float)Math.Cos(angle) * radiusX,
-                rect.Top + rect.Height / 2 + (float)Math.Sin(angle) * radiusY);
+            if (rawPositions.ContainsKey(location.Id) || !location.X.HasValue || !location.Y.HasValue)
+            {
+                continue;
+            }
+
+            rawPositions[location.Id] = new PointF((float)location.X.Value, (float)location.Y.Value + 220f);
         }
 
-        return ApplyGraphTransform(points, rect, zoom, pan);
-    }
-
-    private static Dictionary<int, PointF> ApplyGraphTransform(Dictionary<int, PointF> points, RectangleF rect, float zoom, PointF pan)
-    {
-        if (Math.Abs(zoom - 1f) < 0.001f && Math.Abs(pan.X) < 0.001f && Math.Abs(pan.Y) < 0.001f)
+        foreach (var location in data.BridgeLocations)
         {
-            return points;
+            if (rawPositions.ContainsKey(location.Id) || !location.X.HasValue || !location.Y.HasValue)
+            {
+                continue;
+            }
+
+            rawPositions[location.Id] = new PointF((float)location.X.Value, (float)location.Y.Value);
         }
 
-        var center = new PointF(rect.Left + rect.Width / 2f, rect.Top + rect.Height / 2f);
-        return points.ToDictionary(
+        if (rawPositions.Count == 0)
+        {
+            return [];
+        }
+
+        var minX = rawPositions.Values.Min(point => point.X);
+        var maxX = rawPositions.Values.Max(point => point.X);
+        var minY = rawPositions.Values.Min(point => point.Y);
+        var maxY = rawPositions.Values.Max(point => point.Y);
+        var graphWidth = Math.Max(1f, maxX - minX);
+        var graphHeight = Math.Max(1f, maxY - minY);
+        const float padding = 18f;
+        var baseScale = Math.Min(
+            (rect.Width - padding * 2f) / graphWidth,
+            (rect.Height - padding * 2f) / graphHeight);
+        var scale = baseScale * zoom;
+        var contentWidth = graphWidth * scale;
+        var contentHeight = graphHeight * scale;
+        var offsetX = rect.Left + rect.Width / 2f - contentWidth / 2f;
+        var offsetY = rect.Top + rect.Height / 2f - contentHeight / 2f;
+
+        return rawPositions.ToDictionary(
             pair => pair.Key,
             pair => new PointF(
-                center.X + (pair.Value.X - center.X) * zoom + pan.X,
-                center.Y + (pair.Value.Y - center.Y) * zoom + pan.Y));
+                offsetX + (pair.Value.X - minX) * scale + pan.X,
+                offsetY + (pair.Value.Y - minY) * scale + pan.Y));
     }
 
     private void DrawControls(Graphics g, MapOverlayData data)
@@ -1057,6 +1127,24 @@ internal sealed class MapOverlayForm : Form
     }
 
     private static string PairKey(int from, int to) => from <= to ? $"{from}:{to}" : $"{to}:{from}";
+
+    private static RectangleF Inflate(RectangleF rect, float amount)
+    {
+        rect.Inflate(amount, amount);
+        return rect;
+    }
+
+    private static Color WithAlpha(Color color, int alpha) => Color.FromArgb(alpha, color.R, color.G, color.B);
+
+    private static Color EdgeColor(MapEdge edge)
+    {
+        if (edge.Source == "traversed")
+        {
+            return Color.FromArgb(242, 255, 242, 191);
+        }
+
+        return Color.FromArgb(166, 20, 184, 166);
+    }
 
     private static Color NodeColor(MapLocation location, string? currentLocation)
     {
