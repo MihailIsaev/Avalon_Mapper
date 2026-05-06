@@ -722,9 +722,9 @@ internal sealed class MapOverlayForm : Form
         using var muted = new SolidBrush(Color.FromArgb(165, Color.White));
         using var font = new Font("Segoe UI", 8);
         var portal = data.LastPortalDestination is { Length: > 0 }
-            ? $"Last portal: {data.LastPortalDestination}"
+            ? $"Last portal: {data.LastPortalDestination} / ttl {FormatDuration(data.LastPortalExpiresInSeconds)}"
             : "Last portal: none";
-        g.DrawString(TrimTo(portal, 54), font, muted, new PointF(14, Height - 66));
+        g.DrawString(TrimTo(portal, 72), font, muted, LastPortalTextPoint());
     }
 
     private static void DrawInputBox(Graphics g, RectangleF rect, string text, bool active, Font font)
@@ -998,18 +998,39 @@ internal sealed class MapOverlayForm : Form
     }
 
     private RectangleF HeaderRect() => new(0, 0, Width, 44);
-    private RectangleF GraphRect() => new(12, 56, Math.Max(20, Width - 24), Math.Max(40, Height - 118));
-    private RectangleF RouteFromRect() => new(14, Height - 54, 105, 24);
-    private RectangleF RouteToRect() => new(124, Height - 54, 105, 24);
-    private RectangleF FindButtonRect() => new(234, Height - 54, 48, 24);
-    private RectangleF DelRoutesButtonRect() => new(288, Height - 54, 72, 24);
+    private RectangleF GraphRect() => new(12, 56, Math.Max(20, Width - 24), Math.Max(40, Height - 138));
+    private RectangleF RouteFromRect() => new(14, Height - 74, 105, 24);
+    private RectangleF RouteToRect() => new(124, Height - 74, 105, 24);
+    private RectangleF FindButtonRect() => new(234, Height - 74, 48, 24);
+    private RectangleF DelRoutesButtonRect() => new(288, Height - 74, 72, 24);
     private RectangleF CopyButtonRect() => new(234, Height - 24, 48, 22);
     private RectangleF RouteCountRect() => new(288, Height - 24, 72, 22);
+    private PointF LastPortalTextPoint() => new(14, Height - 45);
     private RectangleF UndoButtonRect() => new(Math.Max(14, Width - 62), 7, 48, 24);
     private RectangleF PassClicksButtonRect() => new(Math.Max(14, Width - 156), 7, 88, 24);
     private RectangleF ResizeHandleRect() => new(Width - 28, Height - 28, 28, 28);
 
     private static bool Contains(RectangleF rect, Point point) => rect.Contains(point.X, point.Y);
+
+    private static string FormatDuration(int? seconds)
+    {
+        if (!seconds.HasValue)
+        {
+            return "unknown ttl";
+        }
+
+        var value = Math.Max(0, seconds.Value);
+        var h = value / 3600;
+        var m = value % 3600 / 60;
+        var s = value % 60;
+
+        if (h > 0)
+        {
+            return $"{h}h {m}m";
+        }
+
+        return m > 0 ? $"{m}m {s}s" : $"{s}s";
+    }
 
     private string? SelectedLocationName(MapOverlayData data)
     {
