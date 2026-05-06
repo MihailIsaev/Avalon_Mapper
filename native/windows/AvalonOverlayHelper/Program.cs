@@ -820,10 +820,10 @@ internal sealed class MapOverlayForm : Form
 
         if (Contains(GraphRect(), e.Location))
         {
-            var hit = _nodeRects.LastOrDefault(n => Contains(n.Rect, e.Location));
-            if (hit.Id != 0)
+            var graphHit = _nodeRects.LastOrDefault(n => Contains(n.Rect, e.Location));
+            if (graphHit.Id != 0)
             {
-                _selectedLocationId = hit.Id;
+                _selectedLocationId = graphHit.Id;
             }
 
             _panningGraph = true;
