@@ -11,6 +11,7 @@ import type {
   ParsedCurrentLocation,
   ParsedPortalTooltip,
   Region,
+  SyncSettings,
 } from "./types";
 
 type Page = "dashboard" | "capture" | "graph" | "observations" | "settings" | "diagnostics";
@@ -58,6 +59,12 @@ const emptyDashboard: DashboardData = {
   last_capture_status: "No captures yet",
 };
 
+const emptySyncSettings: SyncSettings = {
+  enabled: false,
+  server_url: "",
+  write_token: "",
+};
+
 export default function App() {
   const [page, setPage] = useState<Page>("dashboard");
   const [hotkeys, setHotkeys] = useState<HotkeySettings | null>(null);
@@ -69,6 +76,7 @@ export default function App() {
   const [portalRegion, setPortalRegion] = useState<Region | null>(null);
   const [diagnostics, setDiagnostics] = useState<OverlayDiagnostics | null>(null);
   const [mapOverlayStatus, setMapOverlayStatus] = useState<MapOverlayStatus | null>(null);
+  const [syncSettings, setSyncSettings] = useState<SyncSettings>(emptySyncSettings);
   const [rawText, setRawText] = useState("Avalonian Portal\nDeepwood Dell");
   const [manualCorrection, setManualCorrection] = useState("");
   const [portalText, setPortalText] = useState("Avalonian Portal\nEverwinter Crossing");
@@ -91,6 +99,7 @@ export default function App() {
       nextDiagnostics,
       nextMapOverlayStatus,
       nextHotkeys,
+      nextSyncSettings,
     ] =
       await Promise.all([
         api.dashboard(),
@@ -101,6 +110,7 @@ export default function App() {
         api.overlayDiagnostics(),
         api.getMapOverlayStatus(),
         api.getHotkeySettings(),
+        api.getSyncSettings(),
       ]);
     setDashboard(nextDashboard);
     setGraph(nextGraph);
@@ -110,11 +120,21 @@ export default function App() {
     setDiagnostics(nextDiagnostics);
     setMapOverlayStatus(nextMapOverlayStatus);
     setHotkeys(nextHotkeys);
+    setSyncSettings(nextSyncSettings);
   }, []);
 
   useEffect(() => {
     refresh().catch((err) => setError(String(err)));
   }, [refresh]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      refresh().catch((err) => setError(String(err)));
+    }, 3000);
+
+    return () => window.clearInterval(interval);
+  }, [refresh]);
+
   useEffect(() => {
       if (!recordingHotkey) return;
 
@@ -338,10 +358,12 @@ export default function App() {
           <Settings
               diagnostics={diagnostics}
               mapOverlayStatus={mapOverlayStatus}
+              syncSettings={syncSettings}
               hotkeys={hotkeys}
               recordingHotkey={recordingHotkey}
               setRecordingHotkey={setRecordingHotkey}
               setHotkeys={setHotkeys}
+              setSyncSettings={setSyncSettings}
               runAction={runAction}
             />
         )}
@@ -523,20 +545,34 @@ function Observations({ observations }: { observations: Observation[] }) {
 function Settings({
   diagnostics,
   mapOverlayStatus,
+  syncSettings,
   hotkeys,
   recordingHotkey,
   setRecordingHotkey,
   setHotkeys,
+  setSyncSettings,
   runAction,
 }: {
   diagnostics: OverlayDiagnostics | null;
   mapOverlayStatus: MapOverlayStatus | null;
+  syncSettings: SyncSettings;
   hotkeys: HotkeySettings | null;
   recordingHotkey: string | null;
   setRecordingHotkey: (value: string | null) => void;
   setHotkeys: (value: HotkeySettings) => void;
+  setSyncSettings: (value: SyncSettings) => void;
   runAction: (label: string, action: () => Promise<unknown>) => Promise<void>;
 }) {
+  const [syncEnabled, setSyncEnabled] = useState(syncSettings.enabled);
+  const [syncServerUrl, setSyncServerUrl] = useState(syncSettings.server_url);
+  const [syncWriteToken, setSyncWriteToken] = useState(syncSettings.write_token);
+
+  useEffect(() => {
+    setSyncEnabled(syncSettings.enabled);
+    setSyncServerUrl(syncSettings.server_url);
+    setSyncWriteToken(syncSettings.write_token);
+  }, [syncSettings]);
+
   return (
     <section className="grid two">
       <Panel title="Engine Modes">
@@ -549,20 +585,33 @@ function Settings({
         <Readout label="Accessibility" value="Only needed later for global hotkeys or cursor APIs." />
         <Readout label="Windows admin" value="Not required by design." />
       </Panel>
-      <Panel title="Map Overlay">
-
-      <Panel title="Danger Zone">
+      <Panel title="Shared Edge Sync">
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={syncEnabled}
+            onChange={(event) => setSyncEnabled(event.target.checked)}
+          />
+          <span>Enable server sync</span>
+        </label>
+        <TextInput label="Server URL" value={syncServerUrl} onChange={setSyncServerUrl} />
+        <TextInput label="Write token" value={syncWriteToken} onChange={setSyncWriteToken} />
+        <div className="button-row">
           <button
-            className="danger"
             onClick={() =>
-              runAction("Resetting graph database", async () => {
-                await api.resetGraphDatabase();
+              runAction("Saving sync settings", async () => {
+                const updated = await api.setSyncSettings(syncEnabled, syncServerUrl, syncWriteToken);
+                setSyncSettings(updated);
               })
             }
           >
-            Reset graph database
+            Save sync settings
           </button>
+          <button onClick={() => runAction("Syncing edges", () => api.syncNow())}>Sync now</button>
+        </div>
+        <Readout label="Status" value={syncSettings.enabled ? "Enabled" : "Disabled"} />
       </Panel>
+      <Panel title="Map Overlay">
         <div className="button-row">
           <button onClick={() => runAction("Showing map overlay", () => api.showMapOverlay())}>Show overlay</button>
           <button onClick={() => runAction("Hiding map overlay", () => api.hideMapOverlay())}>Hide overlay</button>
@@ -605,6 +654,18 @@ function Settings({
             />
           </div>
         </Panel>
+      <Panel title="Danger Zone">
+        <button
+          className="danger"
+          onClick={() =>
+            runAction("Resetting graph database", async () => {
+              await api.resetGraphDatabase();
+            })
+          }
+        >
+          Reset graph database
+        </button>
+      </Panel>
     </section>
   );
 }

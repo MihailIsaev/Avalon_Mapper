@@ -11,6 +11,7 @@ import type {
   MapOverlayStatus,
   OverlayDiagnostics,
   Region,
+  SyncSettings,
 } from "../types";
 
 export const api = {
@@ -22,6 +23,14 @@ export const api = {
         modifiers,
         label,
       }),
+  getSyncSettings: () => invoke<SyncSettings>("get_sync_settings"),
+  setSyncSettings: (enabled: boolean, serverUrl: string, writeToken: string) =>
+    invoke<SyncSettings>("set_sync_settings", {
+      enabled,
+      serverUrl,
+      writeToken,
+    }),
+  syncNow: () => invoke<void>("sync_now"),
   rebuildGraphLayout: () => invoke<void>("rebuild_graph_layout"),
   resetGraphDatabase: () => invoke<void>("reset_graph_database"),
   dashboard: () => invoke<DashboardData>("get_dashboard"),

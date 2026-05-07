@@ -1,0 +1,20 @@
+[Unit]
+Description=Avalon Mapper sync server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+Environment=AVALON_SYNC_HOST=127.0.0.1
+Environment=AVALON_SYNC_PORT=8787
+Environment=AVALON_SYNC_DB=/var/lib/avalon-sync/avalon-sync.sqlite
+Environment=AVALON_SYNC_WRITE_TOKEN=
+ExecStart=/usr/bin/python3 /opt/avalon-sync/avalon_sync_server.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+

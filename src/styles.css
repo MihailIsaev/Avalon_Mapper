@@ -234,6 +234,29 @@ textarea {
   resize: vertical;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  color: #26363a;
+  font-weight: 700;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+}
+
+button.danger {
+  border-color: #9f2f2f;
+  background: #b43a3a;
+}
+
+button.danger:hover {
+  background: #962f2f;
+}
+
 .readout,
 .region-summary,
 .list-row,

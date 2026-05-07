@@ -22,6 +22,12 @@ export interface HotkeySettings {
   capture_portal: HotkeyBinding;
 }
 
+export interface SyncSettings {
+  enabled: boolean;
+  server_url: string;
+  write_token: string;
+}
+
 export interface Location {
   id: number;
   name: string;

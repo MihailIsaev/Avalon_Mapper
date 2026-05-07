@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
     fs,
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader, Read, Write},
+    net::TcpStream,
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
@@ -492,6 +493,40 @@ struct GraphData {
     edges: Vec<Edge>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct SyncSettings {
+    enabled: bool,
+    server_url: String,
+    write_token: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SyncSnapshot {
+    ok: bool,
+    edges: Vec<SyncEdgePayload>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct SyncEdgePayload {
+    from_name: String,
+    to_name: String,
+    from_normalized: Option<String>,
+    to_normalized: Option<String>,
+    first_seen_at: Option<String>,
+    last_seen_at: Option<String>,
+    ttl_seconds: Option<i64>,
+    expires_at: Option<String>,
+    observations_count: Option<i64>,
+    source: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SyncPostResponse {
+    ok: bool,
+    error: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 struct ShortestPathResult {
     from: String,
@@ -818,11 +853,19 @@ fn main() {
                 #[cfg(target_os = "windows")]
                 windows_hotkeys: state.windows_hotkeys,
             });
+            let managed = app.state::<AppState>();
+            start_sync_worker(
+                managed.db_path.clone(),
+                Arc::clone(&managed.map_overlay),
+            );
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_hotkey_settings,
             set_hotkey_binding,
+            get_sync_settings,
+            set_sync_settings,
+            sync_now,
             get_dashboard,
             find_shortest_path,
             mark_edge_traversed,
@@ -1408,6 +1451,31 @@ fn set_hotkey_binding(
 }
 
 #[tauri::command]
+fn get_sync_settings(state: tauri::State<'_, AppState>) -> Result<SyncSettings, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
+    read_sync_settings(&conn)
+}
+
+#[tauri::command]
+fn set_sync_settings(
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+    server_url: String,
+    write_token: String,
+) -> Result<SyncSettings, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
+    set_setting(&conn, "sync_enabled", if enabled { "true" } else { "false" })?;
+    set_setting(&conn, "sync_server_url", server_url.trim())?;
+    set_setting(&conn, "sync_write_token", write_token.trim())?;
+    read_sync_settings(&conn)
+}
+
+#[tauri::command]
+fn sync_now(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    run_sync_once(&state.db_path, &state.map_overlay)
+}
+
+#[tauri::command]
 fn find_shortest_path(
     state: tauri::State<'_, AppState>,
     from_location: String,
@@ -1652,6 +1720,7 @@ fn accept_current_location(
 
 #[tauri::command]
 fn accept_portal_capture(
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
     raw_ocr_text: String,
     corrected_destination: Option<String>,
@@ -1698,7 +1767,11 @@ fn accept_portal_capture(
     set_setting(&tx, "last_capture_status", "Accepted portal destination")?;
     tx.commit().map_err(db_err)?;
 
-    load_edge_by_id(&conn, edge_id)
+    let edge = load_edge_by_id(&conn, edge_id)?;
+    drop(conn);
+    refresh_map_overlay(&app, &state)?;
+    trigger_sync_after_local_change(state.db_path.clone(), Arc::clone(&state.map_overlay));
+    Ok(edge)
 }
 
 #[tauri::command]
@@ -1716,6 +1789,7 @@ fn rebuild_graph_layout(app: AppHandle, state: tauri::State<'_, AppState>) -> Re
 
 #[tauri::command]
 fn create_manual_edge(
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
     from_location: String,
     to_location: String,
@@ -1752,7 +1826,11 @@ fn create_manual_edge(
     set_setting(&tx, "last_capture_status", "Created manual edge")?;
     tx.commit().map_err(db_err)?;
 
-    load_edge_by_id(&conn, edge_id)
+    let edge = load_edge_by_id(&conn, edge_id)?;
+    drop(conn);
+    refresh_map_overlay(&app, &state)?;
+    trigger_sync_after_local_change(state.db_path.clone(), Arc::clone(&state.map_overlay));
+    Ok(edge)
 }
 
 #[tauri::command]
@@ -2190,6 +2268,7 @@ fn capture_portal_destination(
     eprintln!("[capture] portal capture requested from UI");
     let outcome = capture_portal_destination_inner(&app, &state)?;
     refresh_map_overlay(&app, &state)?;
+    trigger_sync_after_local_change(state.db_path.clone(), Arc::clone(&state.map_overlay));
     Ok(outcome)
 }
 
@@ -3547,6 +3626,7 @@ fn handle_hotkey_capture(
     } else {
         apply_current_location_capture(&mut conn, &ocr, measured_ms)
     };
+    let should_sync = result.is_ok();
     if let Err(err) = result {
         let _ = set_setting(
             &conn,
@@ -3556,6 +3636,10 @@ fn handle_hotkey_capture(
     }
     let data = build_map_overlay_data_from_conn(&conn)?;
     send_map_overlay_command_direct(overlay, json!({ "type": "data", "data": data }))?;
+    drop(conn);
+    if should_sync {
+        trigger_sync_after_local_change(db_path.to_path_buf(), Arc::clone(overlay));
+    }
     Ok(())
 }
 
@@ -5213,6 +5297,309 @@ fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<(), String> 
     )
     .map_err(db_err)?;
     Ok(())
+}
+
+fn read_sync_settings(conn: &Connection) -> Result<SyncSettings, String> {
+    Ok(SyncSettings {
+        enabled: get_setting(conn, "sync_enabled")?
+            .map(|value| value == "true")
+            .unwrap_or(false),
+        server_url: get_setting(conn, "sync_server_url")?.unwrap_or_default(),
+        write_token: get_setting(conn, "sync_write_token")?.unwrap_or_default(),
+    })
+}
+
+fn start_sync_worker(db_path: PathBuf, overlay: Arc<Mutex<Option<MapOverlayProcess>>>) {
+    thread::spawn(move || loop {
+        if let Err(err) = run_sync_once(&db_path, &overlay) {
+            eprintln!("[sync] {err}");
+        }
+        thread::sleep(StdDuration::from_secs(3));
+    });
+}
+
+fn trigger_sync_after_local_change(
+    db_path: PathBuf,
+    overlay: Arc<Mutex<Option<MapOverlayProcess>>>,
+) {
+    thread::spawn(move || {
+        if let Err(err) = run_sync_once(&db_path, &overlay) {
+            eprintln!("[sync] local change sync failed: {err}");
+        }
+    });
+}
+
+fn run_sync_once(
+    db_path: &Path,
+    overlay: &Arc<Mutex<Option<MapOverlayProcess>>>,
+) -> Result<(), String> {
+    let mut conn = Connection::open(db_path).map_err(db_err)?;
+    initialize_schema(&conn).map_err(db_err)?;
+    let settings = read_sync_settings(&conn)?;
+    if !settings.enabled || settings.server_url.trim().is_empty() {
+        return Ok(());
+    }
+
+    let snapshot_url = sync_url(&settings.server_url, "snapshot")?;
+    let snapshot_body = http_json_request("GET", &snapshot_url, None, None)?;
+    let snapshot: SyncSnapshot = serde_json::from_str(&snapshot_body)
+        .map_err(|err| format!("Could not parse sync snapshot: {err}; body={snapshot_body}"))?;
+    if !snapshot.ok {
+        return Err(snapshot.error.unwrap_or_else(|| "Sync snapshot failed".to_string()));
+    }
+
+    let mut changed = 0usize;
+    for edge in snapshot.edges {
+        if apply_sync_edge(&mut conn, &edge)? {
+            changed += 1;
+        }
+    }
+
+    let edges = load_edges(&conn)?;
+    let post_url = sync_url(&settings.server_url, "edges")?;
+    for edge in edges {
+        if edge.status == "expired" {
+            continue;
+        }
+        let from_normalized = normalize_location_name(&edge.from_location_name);
+        let to_normalized = normalize_location_name(&edge.to_location_name);
+        let payload = SyncEdgePayload {
+            from_name: edge.from_location_name,
+            to_name: edge.to_location_name,
+            from_normalized: Some(from_normalized),
+            to_normalized: Some(to_normalized),
+            first_seen_at: Some(edge.first_seen_at),
+            last_seen_at: Some(edge.last_seen_at),
+            ttl_seconds: edge.ttl_seconds,
+            expires_at: edge.expires_at,
+            observations_count: Some(edge.observations_count),
+            source: Some(edge.source),
+        };
+        let body = serde_json::to_string(&payload).map_err(|err| err.to_string())?;
+        let response_body = http_json_request("POST", &post_url, Some(&body), Some(&settings.write_token))?;
+        let response: SyncPostResponse = serde_json::from_str(&response_body)
+            .map_err(|err| format!("Could not parse sync POST response: {err}; body={response_body}"))?;
+        if !response.ok {
+            return Err(response.error.unwrap_or_else(|| "Sync POST failed".to_string()));
+        }
+    }
+
+    if changed > 0 {
+        recompute_graph_layout(&conn)?;
+        let data = build_map_overlay_data_from_conn(&conn)?;
+        let _ = send_map_overlay_command_direct(overlay, json!({ "type": "data", "data": data }));
+        eprintln!("[sync] applied {changed} remote edges");
+    }
+
+    Ok(())
+}
+
+fn apply_sync_edge(conn: &mut Connection, edge: &SyncEdgePayload) -> Result<bool, String> {
+    let from_name = edge.from_name.trim();
+    let to_name = edge.to_name.trim();
+    if from_name.is_empty() || to_name.is_empty() {
+        return Ok(false);
+    }
+
+    let from_normalized = edge
+        .from_normalized
+        .as_deref()
+        .map(normalize_location_name)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| normalize_location_name(from_name));
+    let to_normalized = edge
+        .to_normalized
+        .as_deref()
+        .map(normalize_location_name)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| normalize_location_name(to_name));
+    if from_normalized.is_empty() || to_normalized.is_empty() {
+        return Ok(false);
+    }
+
+    let tx = conn.transaction().map_err(db_err)?;
+    let from_zone = infer_zone_type_from_name(from_name);
+    let to_zone = infer_zone_type_from_name(to_name);
+    if !allowed_graph_zone_type(&from_zone) || !allowed_graph_zone_type(&to_zone) {
+        return Ok(false);
+    }
+    let from_id = upsert_location(&tx, from_name, &from_normalized, &from_zone, false)?;
+    let to_id = upsert_location(&tx, to_name, &to_normalized, &to_zone, false)?;
+    let changed = upsert_synced_edge(
+        &tx,
+        from_id,
+        to_id,
+        edge.first_seen_at.as_deref(),
+        edge.last_seen_at.as_deref(),
+        edge.ttl_seconds,
+        edge.expires_at.as_deref(),
+        edge.observations_count,
+    )?;
+    tx.commit().map_err(db_err)?;
+    Ok(changed)
+}
+
+fn upsert_synced_edge(
+    conn: &Connection,
+    from_location_id: i64,
+    to_location_id: i64,
+    first_seen_at: Option<&str>,
+    last_seen_at: Option<&str>,
+    ttl_seconds: Option<i64>,
+    expires_at: Option<&str>,
+    observations_count: Option<i64>,
+) -> Result<bool, String> {
+    let now = now();
+    let first_seen_at = first_seen_at.unwrap_or(&now);
+    let last_seen_at = last_seen_at.unwrap_or(&now);
+    let existing = conn
+        .query_row(
+            r#"
+            SELECT id, last_seen_at FROM edges
+            WHERE (from_location_id = ?1 AND to_location_id = ?2)
+               OR (from_location_id = ?2 AND to_location_id = ?1)
+            "#,
+            params![from_location_id, to_location_id],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+        )
+        .optional()
+        .map_err(db_err)?;
+
+    if let Some((id, existing_last_seen_at)) = existing {
+        if existing_last_seen_at.as_str() >= last_seen_at {
+            return Ok(false);
+        }
+        conn.execute(
+            r#"
+            UPDATE edges
+            SET last_seen_at = ?1,
+                ttl_seconds = COALESCE(?2, ttl_seconds),
+                expires_at = COALESCE(?3, expires_at),
+                observations_count = MAX(observations_count, COALESCE(?4, observations_count)),
+                confidence = 1.0,
+                status = 'active',
+                source = 'sync'
+            WHERE id = ?5
+            "#,
+            params![last_seen_at, ttl_seconds, expires_at, observations_count, id],
+        )
+        .map_err(db_err)?;
+        Ok(true)
+    } else {
+        conn.execute(
+            r#"
+            INSERT INTO edges (
+                from_location_id, to_location_id, first_seen_at, last_seen_at,
+                ttl_seconds, expires_at, observations_count, confidence, status, source
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, COALESCE(?7, 1), 1.0, 'active', 'sync')
+            "#,
+            params![
+                from_location_id,
+                to_location_id,
+                first_seen_at,
+                last_seen_at,
+                ttl_seconds,
+                expires_at,
+                observations_count
+            ],
+        )
+        .map_err(db_err)?;
+        Ok(true)
+    }
+}
+
+fn sync_url(base: &str, endpoint: &str) -> Result<String, String> {
+    let base = base.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return Err("Sync server URL is empty".to_string());
+    }
+    Ok(format!("{base}/{endpoint}"))
+}
+
+struct ParsedHttpUrl {
+    host: String,
+    port: u16,
+    path: String,
+}
+
+fn parse_http_url(url: &str) -> Result<ParsedHttpUrl, String> {
+    let rest = url
+        .strip_prefix("http://")
+        .ok_or_else(|| "Only http:// sync URLs are supported in this MVP".to_string())?;
+    let (authority, path) = rest
+        .split_once('/')
+        .map(|(authority, path)| (authority, format!("/{path}")))
+        .unwrap_or((rest, "/".to_string()));
+    let (host, port) = if let Some((host, port)) = authority.rsplit_once(':') {
+        let port = port
+            .parse::<u16>()
+            .map_err(|_| format!("Invalid sync URL port: {port}"))?;
+        (host.to_string(), port)
+    } else {
+        (authority.to_string(), 80)
+    };
+    if host.is_empty() {
+        return Err("Sync URL host is empty".to_string());
+    }
+    Ok(ParsedHttpUrl { host, port, path })
+}
+
+fn http_json_request(
+    method: &str,
+    url: &str,
+    body: Option<&str>,
+    token: Option<&str>,
+) -> Result<String, String> {
+    let parsed = parse_http_url(url)?;
+    let mut stream = TcpStream::connect((parsed.host.as_str(), parsed.port))
+        .map_err(|err| format!("Could not connect to sync server {}:{}: {err}", parsed.host, parsed.port))?;
+    stream
+        .set_read_timeout(Some(StdDuration::from_secs(10)))
+        .map_err(|err| err.to_string())?;
+    stream
+        .set_write_timeout(Some(StdDuration::from_secs(10)))
+        .map_err(|err| err.to_string())?;
+
+    let body = body.unwrap_or("");
+    let mut request = format!(
+        "{method} {} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\nContent-Length: {}\r\n",
+        parsed.path,
+        parsed.host,
+        body.as_bytes().len()
+    );
+    if body.is_empty() {
+        request.push_str("Content-Type: application/json\r\n");
+    } else {
+        request.push_str("Content-Type: application/json; charset=utf-8\r\n");
+    }
+    if let Some(token) = token.filter(|token| !token.trim().is_empty()) {
+        request.push_str(&format!("X-Avalon-Token: {}\r\n", token.trim()));
+    }
+    request.push_str("\r\n");
+    request.push_str(body);
+
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|err| format!("Could not write sync request: {err}"))?;
+    let mut response = Vec::new();
+    stream
+        .read_to_end(&mut response)
+        .map_err(|err| format!("Could not read sync response: {err}"))?;
+    let response = String::from_utf8_lossy(&response);
+    let (head, body) = response
+        .split_once("\r\n\r\n")
+        .ok_or_else(|| "Invalid HTTP response from sync server".to_string())?;
+    let status = head
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|status| status.parse::<u16>().ok())
+        .ok_or_else(|| "Invalid HTTP status from sync server".to_string())?;
+    if !(200..300).contains(&status) {
+        return Err(format!("Sync server returned HTTP {status}: {body}"));
+    }
+    Ok(body.to_string())
 }
 
 fn deterministic_jitter(id: i64) -> (f64, f64) {
