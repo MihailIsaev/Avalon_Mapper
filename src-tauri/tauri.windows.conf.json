@@ -1,0 +1,31 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Avalon Mapper",
+    "icon": ["icons/icon.ico", "icons/icon.png"],
+    "resources": {
+      "resources/AvalonOverlayHelper.exe": "AvalonOverlayHelper.exe",
+      "resources/AvalonOcrHelper.exe": "AvalonOcrHelper.exe",
+      "../data/albion_navigator_import.json": "data/albion_navigator_import.json",
+      "../data/albion_locations_all.json": "data/albion_locations_all.json",
+      "../data/albion_locations_all.txt": "data/albion_locations_all.txt",
+      "../native/ocr/paddle_ocr_helper.py": "native/ocr/paddle_ocr_helper.py"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "windows/nsis-hooks.nsh",
+        "languages": ["English", "Russian"],
+        "displayLanguageSelector": true,
+        "startMenuFolder": "Avalon Mapper"
+      }
+    }
+  }
+}

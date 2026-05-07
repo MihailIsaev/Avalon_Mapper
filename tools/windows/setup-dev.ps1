@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("run", "setup")]
+    [ValidateSet("run", "setup", "build-installer")]
     [string]$Mode = "run"
 )
 
@@ -252,6 +252,21 @@ function Ensure-PythonOcr {
     }
 }
 
+function Ensure-PythonModule($VenvPython, $ModuleName, $PackageName) {
+    if (Test-PythonImport $VenvPython $ModuleName) {
+        return
+    }
+
+    Write-Step "Installing $PackageName"
+    & $VenvPython -m pip install $PackageName
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not install $PackageName in OCR virtualenv"
+    }
+    if (-not (Test-PythonImport $VenvPython $ModuleName)) {
+        throw "$PackageName was installed but module $ModuleName cannot be imported"
+    }
+}
+
 function Ensure-Rust($Arch) {
     Add-PathForProcess "$env:USERPROFILE\.cargo\bin"
     if (-not (Has-Command "rustup")) {
@@ -495,6 +510,9 @@ if ($LASTEXITCODE -ne 0) {
 Write-Step "Publishing Windows overlay helper"
 Stop-StaleOverlayHelper
 $publishedHelper = Join-Path $repoRoot "native\windows\AvalonOverlayHelper\bin\Release\net8.0-windows\$dotnetRuntime\publish\AvalonOverlayHelper.exe"
+$resourceDir = Join-Path $repoRoot "src-tauri\resources"
+$bundledOverlayHelper = Join-Path $resourceDir "AvalonOverlayHelper.exe"
+$bundledOcrHelper = Join-Path $resourceDir "AvalonOcrHelper.exe"
 Wait-FileWritable $publishedHelper 10
 Push-Location "native\windows\AvalonOverlayHelper"
 try {
@@ -507,8 +525,59 @@ finally {
     Pop-Location
 }
 
+Write-Step "Preparing bundled helper resources"
+New-Item -ItemType Directory -Force -Path $resourceDir | Out-Null
+Wait-FileWritable $bundledOverlayHelper 10
+Copy-Item $publishedHelper $bundledOverlayHelper -Force
+
+if ($Mode -eq "build-installer") {
+    Write-Step "Building bundled OCR helper"
+    $venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
+    Ensure-PythonModule $venvPython "PyInstaller" "pyinstaller"
+    Wait-FileWritable $bundledOcrHelper 10
+    $pyInstallerWork = Join-Path $repoRoot "src-tauri\target\pyinstaller"
+    New-Item -ItemType Directory -Force -Path $pyInstallerWork | Out-Null
+    & $venvPython -m PyInstaller `
+        --clean `
+        --onefile `
+        --name AvalonOcrHelper `
+        --distpath $resourceDir `
+        --workpath $pyInstallerWork `
+        --specpath $pyInstallerWork `
+        (Join-Path $repoRoot "native\ocr\paddle_ocr_helper.py")
+    if ($LASTEXITCODE -ne 0) {
+        throw "PyInstaller failed to build AvalonOcrHelper.exe"
+    }
+    if (-not (Test-Path $bundledOcrHelper)) {
+        throw "PyInstaller completed but $bundledOcrHelper was not created"
+    }
+}
+
 if ($Mode -eq "setup") {
     Write-Step "Setup complete"
+    exit 0
+}
+
+if ($Mode -eq "build-installer") {
+    Write-Step "Building Avalon Mapper setup.exe"
+    Stop-StaleOverlayHelper
+    $buildCommand = "cd /d `"$repoRoot`" && npm.cmd run build -- --config src-tauri\tauri.windows.conf.json"
+    Invoke-InVs $devCmd $hostArch $buildCommand
+
+    $nsisDir = Join-Path $repoRoot "src-tauri\target\release\bundle\nsis"
+    $installer = Get-ChildItem $nsisDir -Filter "*.exe" -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    if (-not $installer) {
+        throw "Tauri build finished but no NSIS installer was found in $nsisDir"
+    }
+
+    $releaseDir = Join-Path $repoRoot "dist\windows"
+    New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+    $setupPath = Join-Path $releaseDir "AvalonMapperSetup.exe"
+    Copy-Item $installer.FullName $setupPath -Force
+    Write-Step "Installer ready"
+    Write-Host $setupPath -ForegroundColor Green
     exit 0
 }
 

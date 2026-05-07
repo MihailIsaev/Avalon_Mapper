@@ -7,6 +7,7 @@ __pycache__/
 .DS_Store
 .idea/
 src-tauri/target/
+src-tauri/resources/
 native/ocr/__pycache__/
 tools/data/
 test_crops/

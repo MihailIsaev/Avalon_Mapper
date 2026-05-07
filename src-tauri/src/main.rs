@@ -56,14 +56,33 @@ struct AvalonInfo {
     chests: Vec<AvalonChestInfo>,
 }
 
+fn bundled_or_project_path(relative_path: &str) -> PathBuf {
+    let relative = Path::new(relative_path);
+    let mut candidates = Vec::new();
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            candidates.push(exe_dir.join("resources").join(relative));
+            candidates.push(exe_dir.join(relative));
+        }
+    }
+
+    if let Some(project_root) = Path::new(env!("CARGO_MANIFEST_DIR")).parent() {
+        candidates.push(project_root.join(relative));
+    }
+
+    candidates
+        .iter()
+        .find(|path| path.exists())
+        .cloned()
+        .unwrap_or_else(|| candidates.pop().unwrap_or_else(|| relative.to_path_buf()))
+}
+
 fn lookup_avalon_info(normalized_name: &str) -> AvalonInfo {
     static CACHE: OnceLock<std::collections::HashMap<String, AvalonInfo>> = OnceLock::new();
 
     let map = CACHE.get_or_init(|| {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("Could not resolve project root")
-            .join("data/albion_navigator_import.json");
+        let path = bundled_or_project_path("data/albion_navigator_import.json");
 
         let text = fs::read_to_string(&path).unwrap_or_else(|err| {
             eprintln!("[avalon-info] failed to read {}: {err}", path.display());
@@ -900,10 +919,7 @@ fn main() {
 }
 
 fn import_static_route_graph(conn: &Connection) -> Result<(), String> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .ok_or_else(|| "Could not resolve project root".to_string())?
-        .join("data/albion_navigator_import.json");
+    let path = bundled_or_project_path("data/albion_navigator_import.json");
 
     if !path.exists() {
         eprintln!("[route-graph] missing {}", path.display());
@@ -3845,29 +3861,36 @@ fn ensure_paddle_ocr_process(
     }
     *process = None;
 
-    let project_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .ok_or_else(|| "Could not resolve project root".to_string())?;
-    let helper_path = project_root.join("native/ocr/paddle_ocr_helper.py");
-    let windows_python_path = project_root.join(".venv/Scripts/python.exe");
-    let unix_python_path = project_root.join(".venv/bin/python3");
-    let python = if cfg!(target_os = "windows") && windows_python_path.exists() {
-        windows_python_path
-    } else if unix_python_path.exists() {
-        unix_python_path
-    } else if cfg!(target_os = "windows") {
-        return Err(format!(
-            "Python OCR environment is missing: {}. Run tools\\windows\\run-dev.cmd so it creates .venv and installs OCR dependencies.",
-            windows_python_path.display()
-        ));
+    let bundled_ocr_exe = bundled_or_project_path("AvalonOcrHelper.exe");
+    let mut command = if cfg!(target_os = "windows") && bundled_ocr_exe.exists() {
+        eprintln!("[ocr] starting bundled worker exe={}", bundled_ocr_exe.display());
+        let mut command = Command::new(bundled_ocr_exe);
+        command.arg("--server");
+        command
     } else {
-        PathBuf::from("python3")
+        let helper_path = bundled_or_project_path("native/ocr/paddle_ocr_helper.py");
+        let windows_python_path = bundled_or_project_path(".venv/Scripts/python.exe");
+        let unix_python_path = bundled_or_project_path(".venv/bin/python3");
+        let python = if cfg!(target_os = "windows") && windows_python_path.exists() {
+            windows_python_path
+        } else if unix_python_path.exists() {
+            unix_python_path
+        } else if cfg!(target_os = "windows") {
+            return Err(format!(
+                "Python OCR environment is missing: {}. Install Python OCR runtime or run tools\\windows\\run-dev.cmd on a development checkout so it creates .venv and installs OCR dependencies.",
+                windows_python_path.display()
+            ));
+        } else {
+            PathBuf::from("python3")
+        };
+
+        eprintln!("[ocr] starting worker python={} helper={}", python.display(), helper_path.display());
+        let mut command = Command::new(python);
+        command.arg(helper_path).arg("--server");
+        command
     };
 
-    eprintln!("[ocr] starting worker python={} helper={}", python.display(), helper_path.display());
-    let mut child = Command::new(python)
-        .arg(helper_path)
-        .arg("--server")
+    let mut child = command
         .env("PADDLE_PDX_MODEL_SOURCE", "BOS")
         .env("PYTHONIOENCODING", "utf-8")
         .stdin(Stdio::piped())
@@ -4315,10 +4338,7 @@ static LOCATION_METADATA: OnceLock<Vec<LocationMetadataEntry>> = OnceLock::new()
 fn load_location_metadata() -> Vec<LocationMetadataEntry> {
     LOCATION_METADATA
         .get_or_init(|| {
-            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .expect("Could not resolve project root")
-                .join("data/albion_locations_all.json");
+            let path = bundled_or_project_path("data/albion_locations_all.json");
 
             let text = fs::read_to_string(&path).unwrap_or_else(|err| {
                 eprintln!("[location-metadata] failed to read {}: {err}", path.display());
@@ -6457,10 +6477,7 @@ fn log_location_dictionary_summary(locations: &[String]) {
 fn load_primary_location_dictionary() -> Result<Vec<String>, String> {
     Ok(PRIMARY_LOCATION_DICTIONARY
         .get_or_init(|| {
-            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .expect("Could not resolve project root")
-                .join("data/albion_locations_all.txt");
+            let path = bundled_or_project_path("data/albion_locations_all.txt");
             let text = fs::read_to_string(&path)
                 .unwrap_or_else(|_| include_str!("../../data/albion_locations_all.txt").to_string());
             let locations = normalize_location_list(
