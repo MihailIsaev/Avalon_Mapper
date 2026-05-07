@@ -50,6 +50,86 @@ function Test-PythonImport($PythonExe, $ModuleName) {
     }
 }
 
+function Get-PythonVersion($PythonCommand) {
+    try {
+        $version = & $PythonCommand -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+        if ($LASTEXITCODE -eq 0) {
+            return ($version | Select-Object -First 1).Trim()
+        }
+    } catch {
+        return $null
+    }
+    return $null
+}
+
+function Resolve-PythonForVenv {
+    $candidates = @()
+
+    if (Has-Command "py") {
+        $candidates += @("py -3.11")
+    }
+
+    $python311 = Join-Path $env:LOCALAPPDATA "Programs\Python\Python311\python.exe"
+    if (Test-Path $python311) {
+        $candidates += @($python311)
+    }
+
+    if (Has-Command "python") {
+        $candidates += @("python")
+    }
+
+    foreach ($candidate in $candidates) {
+        $command = $candidate
+        $version = if ($candidate -eq "py -3.11") {
+            try {
+                $output = & py -3.11 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+                if ($LASTEXITCODE -eq 0) { ($output | Select-Object -First 1).Trim() } else { $null }
+            } catch {
+                $null
+            }
+        } else {
+            Get-PythonVersion $command
+        }
+
+        if ($version -eq "3.11") {
+            return $candidate
+        }
+    }
+
+    throw "Python 3.11 was not found after installation. Close this terminal, open a new one, and rerun tools\windows\run-dev.cmd."
+}
+
+function Invoke-PythonVenv($PythonCommand, $VenvPath) {
+    if ($PythonCommand -eq "py -3.11") {
+        & py -3.11 -m venv $VenvPath
+    } else {
+        & $PythonCommand -m venv $VenvPath
+    }
+}
+
+function Test-VenvPip($VenvPython) {
+    if (-not (Test-Path $VenvPython)) {
+        return $false
+    }
+
+    & $VenvPython -m pip --version *> $null
+    return $LASTEXITCODE -eq 0
+}
+
+function Repair-VenvPip($VenvPython) {
+    if (-not (Test-Path $VenvPython)) {
+        return $false
+    }
+
+    Write-Host "Python OCR virtualenv has no pip; trying ensurepip"
+    & $VenvPython -m ensurepip --upgrade
+    if ($LASTEXITCODE -ne 0) {
+        return $false
+    }
+
+    return Test-VenvPip $VenvPython
+}
+
 function Get-HostArch {
     $arch = $env:PROCESSOR_ARCHITECTURE
     if ([string]::Equals($arch, "ARM64", [StringComparison]::OrdinalIgnoreCase)) {
@@ -124,15 +204,30 @@ function Ensure-PythonOcr {
     }
 
     $venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
+    if ((Test-Path $venvPython) -and -not (Test-VenvPip $venvPython)) {
+        if (-not (Repair-VenvPip $venvPython)) {
+            Write-Host "Removing broken Python OCR virtualenv"
+            Remove-Item ".venv" -Recurse -Force
+        }
+    }
+
     if (-not (Test-Path $venvPython)) {
         Write-Step "Creating Python OCR virtualenv"
-        if (Has-Command "py") {
-            & py -3.11 -m venv ".venv"
-        } else {
-            & python -m venv ".venv"
+        if (Test-Path ".venv") {
+            Write-Host "Removing incomplete Python OCR virtualenv"
+            Remove-Item ".venv" -Recurse -Force
         }
+        $pythonForVenv = Resolve-PythonForVenv
+        Write-Host "Using Python for OCR virtualenv: $pythonForVenv"
+        Invoke-PythonVenv $pythonForVenv ".venv"
         if ($LASTEXITCODE -ne 0) {
-            throw "Could not create Python virtualenv for OCR"
+            throw "Could not create Python virtualenv for OCR with $pythonForVenv. Run '$pythonForVenv -m venv .venv' manually to see the full Python error."
+        }
+        if (-not (Test-Path $venvPython)) {
+            throw "Python virtualenv command completed but $venvPython was not created"
+        }
+        if (-not (Test-VenvPip $venvPython) -and -not (Repair-VenvPip $venvPython)) {
+            throw "Python virtualenv was created but pip is missing. Reinstall Python 3.11 with pip/ensurepip enabled."
         }
     }
 
