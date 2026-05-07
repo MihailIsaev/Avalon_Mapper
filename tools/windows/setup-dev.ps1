@@ -557,13 +557,13 @@ finally {
 
 Write-Step "Preparing bundled helper resources"
 New-Item -ItemType Directory -Force -Path $resourceDir | Out-Null
-New-Item -ItemType Directory -Force -Path $tauriToolsCache | Out-Null
-Ensure-TauriNsisCache $tauriToolsCache
 Wait-FileWritable $bundledOverlayHelper 10
 Copy-Item $publishedHelper $bundledOverlayHelper -Force
 
 if ($Mode -eq "build-installer") {
     Write-Step "Building bundled OCR helper"
+    New-Item -ItemType Directory -Force -Path $tauriToolsCache | Out-Null
+    Ensure-TauriNsisCache $tauriToolsCache
     $venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
     Ensure-PythonModule $venvPython "PyInstaller" "pyinstaller"
     Wait-FileWritable $bundledOcrHelper 10
