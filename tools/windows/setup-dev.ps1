@@ -267,6 +267,35 @@ function Ensure-PythonModule($VenvPython, $ModuleName, $PackageName) {
     }
 }
 
+function Ensure-TauriNsisCache($CacheRoot) {
+    $nsisDir = Join-Path $CacheRoot "NSIS"
+    $makensis = Join-Path $nsisDir "makensis.exe"
+    if (Test-Path $makensis) {
+        Write-Host "Tauri NSIS cache already present: $makensis"
+        return
+    }
+
+    Write-Step "Pre-downloading Tauri NSIS tool cache"
+    New-Item -ItemType Directory -Force -Path $nsisDir | Out-Null
+    $zipUrl = "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip"
+    $zipPath = Join-Path $CacheRoot "nsis-3.11.zip"
+    if (-not (Test-Path $zipPath)) {
+        Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
+    }
+    Expand-Archive -Path $zipPath -DestinationPath $nsisDir -Force
+
+    if (-not (Test-Path $makensis)) {
+        $found = Get-ChildItem $nsisDir -Recurse -Filter "makensis.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found) {
+            Copy-Item $found.FullName $makensis -Force
+        }
+    }
+
+    if (-not (Test-Path $makensis)) {
+        throw "Could not prepare the NSIS tool cache under $nsisDir"
+    }
+}
+
 function Ensure-Rust($Arch) {
     Add-PathForProcess "$env:USERPROFILE\.cargo\bin"
     if (-not (Has-Command "rustup")) {
@@ -511,6 +540,7 @@ Write-Step "Publishing Windows overlay helper"
 Stop-StaleOverlayHelper
 $publishedHelper = Join-Path $repoRoot "native\windows\AvalonOverlayHelper\bin\Release\net8.0-windows\$dotnetRuntime\publish\AvalonOverlayHelper.exe"
 $resourceDir = Join-Path $repoRoot "src-tauri\resources"
+$tauriToolsCache = Join-Path $repoRoot "src-tauri\target\.tauri"
 $bundledOverlayHelper = Join-Path $resourceDir "AvalonOverlayHelper.exe"
 $bundledOcrHelper = Join-Path $resourceDir "AvalonOcrHelper.exe"
 Wait-FileWritable $publishedHelper 10
@@ -527,6 +557,8 @@ finally {
 
 Write-Step "Preparing bundled helper resources"
 New-Item -ItemType Directory -Force -Path $resourceDir | Out-Null
+New-Item -ItemType Directory -Force -Path $tauriToolsCache | Out-Null
+Ensure-TauriNsisCache $tauriToolsCache
 Wait-FileWritable $bundledOverlayHelper 10
 Copy-Item $publishedHelper $bundledOverlayHelper -Force
 

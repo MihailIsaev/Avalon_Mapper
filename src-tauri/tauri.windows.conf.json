@@ -4,6 +4,7 @@
     "active": true,
     "targets": ["nsis"],
     "publisher": "Avalon Mapper",
+    "useLocalToolsDir": true,
     "icon": ["icons/icon.ico", "icons/icon.png"],
     "resources": {
       "resources/AvalonOverlayHelper.exe": "AvalonOverlayHelper.exe",
