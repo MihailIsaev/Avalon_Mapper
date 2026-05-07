@@ -593,7 +593,7 @@ if ($Mode -eq "setup") {
 if ($Mode -eq "build-installer") {
     Write-Step "Building Avalon Mapper setup.exe"
     Stop-StaleOverlayHelper
-    $buildCommand = "cd /d `"$repoRoot`" && npm.cmd run build -- --config src-tauri\tauri.windows.conf.json"
+    $buildCommand = "cd /d `"$repoRoot`" && npm.cmd run build -- --config src-tauri\tauri.installer.conf.json"
     Invoke-InVs $devCmd $hostArch $buildCommand
 
     $nsisDir = Join-Path $repoRoot "src-tauri\target\release\bundle\nsis"
