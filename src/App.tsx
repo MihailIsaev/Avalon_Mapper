@@ -299,11 +299,11 @@ export default function App() {
             <Panel title="Portal Tooltip Capture Box">
               <RegionSummary region={portalRegion} empty="No portal tooltip box configured." />
               <div className="safety-note">
-                Outline the tooltip plaque on screen. The app stores the selection anchor and mirrors the capture
-                rectangle across the current cursor so left/right portal tooltips use the same setup.
+                Right-click to freeze the screen, then select the destination-name strip and timer strip.
+                Portal capture uses exactly those selected strips.
               </div>
               <div className="button-row">
-                <button onClick={() => runAction("Opening overlay", () => api.runOverlaySelection("portal_tooltip", "portal-size"))}>
+                <button onClick={() => runAction("Opening overlay", () => api.runOverlaySelection("portal_tooltip", "portal-strips"))}>
                   Configure box over game
                 </button>
                 <button onClick={() => runAction("Running mock OCR", async () => setPortalText((await api.mockOcr("Avalonian Portal\nEverwinter Crossing")).text))}>

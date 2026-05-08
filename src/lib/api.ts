@@ -51,7 +51,7 @@ export const api = {
     }),
   createManualEdge: (fromLocation: string, toLocation: string) =>
     invoke<Edge>("create_manual_edge", { fromLocation, toLocation }),
-  runOverlaySelection: (key: string, mode: "region" | "portal-size" | "diagnostic") =>
+  runOverlaySelection: (key: string, mode: "region" | "portal-size" | "portal-strips" | "diagnostic") =>
     invoke<Region>("run_overlay_selection", { key, mode }),
   overlayDiagnostics: () => invoke<OverlayDiagnostics>("overlay_diagnostics"),
   showMapOverlay: () => invoke("show_map_overlay"),

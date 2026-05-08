@@ -36,6 +36,17 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def parse_iso(value: str) -> datetime:
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+
+def iso_is_newer(left: str, right: str) -> bool:
+    try:
+        return parse_iso(left) > parse_iso(right)
+    except Exception:
+        return str(left) > str(right)
+
+
 def normalize_name(value: str) -> str:
     return " ".join(value.strip().lower().split())
 
@@ -100,12 +111,18 @@ class EdgeStore:
         with self.lock, self.connect() as conn:
             existing = conn.execute(
                 """
-                SELECT id, observations_count FROM edges
+                SELECT id, from_name, to_name, from_normalized, to_normalized,
+                       first_seen_at, last_seen_at, ttl_seconds, expires_at,
+                       observations_count, source, status
+                FROM edges
                 WHERE from_normalized = ?1 AND to_normalized = ?2
                 """,
                 (from_normalized, to_normalized),
             ).fetchone()
             if existing:
+                if existing["status"] == "deleted" and not iso_is_newer(last_seen_at, existing["last_seen_at"]):
+                    return dict(existing)
+
                 conn.execute(
                     """
                     UPDATE edges

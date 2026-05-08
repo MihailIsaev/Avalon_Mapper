@@ -1428,6 +1428,9 @@ internal sealed class SelectionForm : Form
     private Point _current;
     private Point _anchor;
     private bool _dragging;
+    private Bitmap? _frozenImage;
+    private int _portalStripStep;
+    private Rectangle? _portalDestinationRect;
 
     public SelectionForm(string mode)
     {
@@ -1463,10 +1466,28 @@ internal sealed class SelectionForm : Form
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
+        if (_mode == "portal-strips" && e.Button == MouseButtons.Right)
+        {
+            _anchor = PointToScreen(e.Location);
+            FreezeCurrentScreen();
+            _portalStripStep = 1;
+            _dragging = false;
+            Invalidate();
+            return;
+        }
+
+        if (_mode == "portal-strips" && _frozenImage is null)
+        {
+            return;
+        }
+
         _dragging = true;
         _start = PointToScreen(e.Location);
         _current = _start;
-        _anchor = _start;
+        if (_mode != "portal-strips")
+        {
+            _anchor = _start;
+        }
         Invalidate();
     }
 
@@ -1492,6 +1513,29 @@ internal sealed class SelectionForm : Form
             return;
         }
 
+        if (_mode == "portal-strips")
+        {
+            if (_portalStripStep == 1)
+            {
+                _portalDestinationRect = rect;
+                _portalStripStep = 2;
+                _dragging = false;
+                Invalidate();
+                return;
+            }
+
+            if (_portalStripStep == 2 && _portalDestinationRect.HasValue)
+            {
+                FinishSelection(Rectangle.Union(_portalDestinationRect.Value, rect), _portalDestinationRect.Value, rect);
+                return;
+            }
+        }
+
+        FinishSelection(rect, null, null);
+    }
+
+    private void FinishSelection(Rectangle rect, Rectangle? destinationRect, Rectangle? timerRect)
+    {
         var screen = Screen.FromPoint(new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2));
         var displayId = (Array.IndexOf(Screen.AllScreens, screen) + 1).ToString();
         var scale = DeviceDpi > 0 ? DeviceDpi / 96.0 : 1.0;
@@ -1502,8 +1546,16 @@ internal sealed class SelectionForm : Form
             rect.Height,
             displayId,
             scale,
-            _mode == "portal-size" ? _anchor.X : null,
-            _mode == "portal-size" ? _anchor.Y : null,
+            _mode is "portal-size" or "portal-strips" ? _anchor.X : null,
+            _mode is "portal-size" or "portal-strips" ? _anchor.Y : null,
+            destinationRect?.X,
+            destinationRect?.Y,
+            destinationRect?.Width,
+            destinationRect?.Height,
+            timerRect?.X,
+            timerRect?.Y,
+            timerRect?.Width,
+            timerRect?.Height,
             false));
         Close();
     }
@@ -1519,11 +1571,20 @@ internal sealed class SelectionForm : Form
     protected override void OnPaint(PaintEventArgs e)
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        if (_frozenImage is not null)
+        {
+            e.Graphics.DrawImage(_frozenImage, Point.Empty);
+        }
         using var textBrush = new SolidBrush(Color.White);
         using var font = new Font("Segoe UI", 12, FontStyle.Bold);
-        var message = _mode == "portal-size"
-            ? "Outline the portal tooltip plaque. Escape to cancel."
-            : "Drag to select capture region. Escape to cancel.";
+        var message = _mode switch
+        {
+            "portal-size" => "Outline the portal tooltip plaque. Escape to cancel.",
+            "portal-strips" when _frozenImage is null => "Right-click the portal tooltip to freeze the game screen. Escape to cancel.",
+            "portal-strips" when _portalStripStep == 1 => "Drag the destination-name strip. Escape to cancel.",
+            "portal-strips" => "Drag the timer strip. Escape to cancel.",
+            _ => "Drag to select capture region. Escape to cancel."
+        };
         e.Graphics.DrawString(message, font, textBrush, 20, 20);
 
         var mouse = PointToClient(Cursor.Position);
@@ -1531,22 +1592,44 @@ internal sealed class SelectionForm : Form
         e.Graphics.DrawLine(crosshair, mouse.X - 12, mouse.Y, mouse.X + 12, mouse.Y);
         e.Graphics.DrawLine(crosshair, mouse.X, mouse.Y - 12, mouse.X, mouse.Y + 12);
 
-        if (!_dragging)
+        if (_portalDestinationRect.HasValue)
         {
-            return;
+            DrawSelectionRect(e.Graphics, ScreenRectToClient(_portalDestinationRect.Value), Color.FromArgb(255, 34, 197, 94), font, textBrush);
         }
 
+        if (!_dragging) { return; }
+
         var rect = Normalized(PointToClient(_start), PointToClient(_current));
-        using var fill = new SolidBrush(Color.FromArgb(55, 20, 184, 166));
-        using var pen = new Pen(Color.FromArgb(255, 45, 212, 191), 2f);
-        e.Graphics.FillRectangle(fill, rect);
-        e.Graphics.DrawRectangle(pen, rect);
-        e.Graphics.DrawString($"{rect.Width} x {rect.Height}", font, textBrush, rect.Left + 8, Math.Max(8, rect.Top + 8));
+        DrawSelectionRect(e.Graphics, rect, Color.FromArgb(255, 45, 212, 191), font, textBrush);
+    }
+
+    private void DrawSelectionRect(Graphics graphics, Rectangle rect, Color color, Font font, Brush textBrush)
+    {
+        using var fill = new SolidBrush(Color.FromArgb(55, color));
+        using var pen = new Pen(color, 2f);
+        graphics.FillRectangle(fill, rect);
+        graphics.DrawRectangle(pen, rect);
+        graphics.DrawString($"{rect.Width} x {rect.Height}", font, textBrush, rect.Left + 8, Math.Max(8, rect.Top + 8));
+    }
+
+    private Rectangle ScreenRectToClient(Rectangle screenRect)
+    {
+        var topLeft = PointToClient(screenRect.Location);
+        return new Rectangle(topLeft.X, topLeft.Y, screenRect.Width, screenRect.Height);
+    }
+
+    private void FreezeCurrentScreen()
+    {
+        _frozenImage?.Dispose();
+        _frozenImage = new Bitmap(Width, Height);
+        using var graphics = Graphics.FromImage(_frozenImage);
+        graphics.CopyFromScreen(Left, Top, 0, 0, Size, CopyPixelOperation.SourceCopy);
+        Opacity = 1.0;
     }
 
     private void Finish(bool cancelled)
     {
-        Program.WriteJson(new OverlaySelectionResult(0, 0, 0, 0, null, null, null, null, cancelled));
+        Program.WriteJson(new OverlaySelectionResult(0, 0, 0, 0, null, null, null, null, null, null, null, null, null, null, null, null, cancelled));
         Close();
     }
 
@@ -1657,6 +1740,14 @@ internal sealed record OverlaySelectionResult(
     double? ScaleFactor,
     int? AnchorX,
     int? AnchorY,
+    int? DestinationX,
+    int? DestinationY,
+    int? DestinationWidth,
+    int? DestinationHeight,
+    int? TimerX,
+    int? TimerY,
+    int? TimerWidth,
+    int? TimerHeight,
     bool Cancelled);
 
 internal sealed record CaptureOcrResult(

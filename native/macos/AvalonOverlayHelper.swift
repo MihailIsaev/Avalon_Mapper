@@ -18,6 +18,14 @@ struct OverlayResult: Encodable {
     let scale_factor: Double?
     let anchor_x: Double?
     let anchor_y: Double?
+    let destination_x: Int?
+    let destination_y: Int?
+    let destination_width: Int?
+    let destination_height: Int?
+    let timer_x: Int?
+    let timer_y: Int?
+    let timer_width: Int?
+    let timer_height: Int?
     let cancelled: Bool
 }
 
@@ -223,6 +231,14 @@ final class SelectionOverlayController: NSObject, NSApplicationDelegate {
                 scale_factor: nil,
                 anchor_x: nil,
                 anchor_y: nil,
+                destination_x: nil,
+                destination_y: nil,
+                destination_width: nil,
+                destination_height: nil,
+                timer_x: nil,
+                timer_y: nil,
+                timer_width: nil,
+                timer_height: nil,
                 cancelled: cancelled
             )
         )
@@ -246,6 +262,9 @@ final class SelectionOverlayView: NSView {
     private var startPoint: NSPoint?
     private var currentPoint: NSPoint?
     private var anchorPoint: NSPoint?
+    private var frozenImage: CGImage?
+    private var portalStripStep = 0
+    private var portalDestinationRect: NSRect?
     private let labelAttributes: [NSAttributedString.Key: Any] = [
         .font: NSFont.systemFont(ofSize: 14, weight: .medium),
         .foregroundColor: NSColor.white
@@ -271,48 +290,80 @@ final class SelectionOverlayView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.clear.setFill()
-        dirtyRect.fill()
+        if let frozenImage {
+            NSImage(cgImage: frozenImage, size: bounds.size).draw(in: bounds)
+        } else {
+            NSColor.clear.setFill()
+            dirtyRect.fill()
+        }
         drawInstructionLabel()
         drawCrosshair()
+
+        if let portalDestinationRect {
+            drawSelectionRect(portalDestinationRect, color: .systemGreen)
+        }
 
         guard let startPoint, let currentPoint else { return }
         let rect = normalizedRect(from: startPoint, to: currentPoint)
         if rect.width < 1 || rect.height < 1 { return }
 
-        NSColor.systemTeal.withAlphaComponent(0.08).setFill()
-        rect.fill()
-        let border = NSBezierPath(rect: rect)
-        NSColor.systemTeal.setStroke()
-        border.lineWidth = 2
-        border.stroke()
-
-        let sizeText = "\(Int(rect.width)) x \(Int(rect.height))"
-        sizeText.draw(
-            at: NSPoint(x: rect.minX + 8, y: max(rect.minY + 8, 8)),
-            withAttributes: labelAttributes
-        )
+        drawSelectionRect(rect, color: .systemTeal)
     }
 
     override func mouseDown(with event: NSEvent) {
-        anchorPoint = convert(event.locationInWindow, from: nil)
+        if mode == "portal-strips" && frozenImage == nil {
+            return
+        }
+        if mode != "portal-strips" {
+            anchorPoint = convert(event.locationInWindow, from: nil)
+        }
         startPoint = convert(event.locationInWindow, from: nil)
         currentPoint = startPoint
         needsDisplay = true
     }
 
+    override func rightMouseDown(with event: NSEvent) {
+        guard mode == "portal-strips" else {
+            super.rightMouseDown(with: event)
+            return
+        }
+        anchorPoint = convert(event.locationInWindow, from: nil)
+        freezeCurrentScreen()
+        portalStripStep = 1
+        startPoint = nil
+        currentPoint = nil
+        needsDisplay = true
+    }
+
     override func mouseDragged(with event: NSEvent) {
+        if mode == "portal-strips" && frozenImage == nil {
+            return
+        }
         currentPoint = convert(event.locationInWindow, from: nil)
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
         currentPoint = convert(event.locationInWindow, from: nil)
-        guard let startPoint, let currentPoint else { return }
-        let rect = normalizedRect(from: startPoint, to: currentPoint)
+        guard let dragStart = startPoint, let dragEnd = currentPoint else { return }
+        let rect = normalizedRect(from: dragStart, to: dragEnd)
         if rect.width < 4 || rect.height < 4 {
             onCancel?()
             return
+        }
+        if mode == "portal-strips" {
+            if portalStripStep == 1 {
+                portalDestinationRect = rect
+                portalStripStep = 2
+                self.startPoint = nil
+                self.currentPoint = nil
+                needsDisplay = true
+                return
+            }
+            if portalStripStep == 2, let destination = portalDestinationRect {
+                onComplete?(portalStripResult(destination: destination, timer: rect))
+                return
+            }
         }
         onComplete?(result(for: rect))
     }
@@ -329,6 +380,14 @@ final class SelectionOverlayView: NSView {
         let message: String
         if mode == "portal-size" {
             message = "Outline the portal tooltip plaque. Escape to cancel."
+        } else if mode == "portal-strips" {
+            if frozenImage == nil {
+                message = "Right-click the portal tooltip to freeze the game screen. Escape to cancel."
+            } else if portalStripStep == 1 {
+                message = "Drag the destination-name strip. Escape to cancel."
+            } else {
+                message = "Drag the timer strip. Escape to cancel."
+            }
         } else if mode == "diagnostic" {
             message = "Transparent overlay test. Drag anywhere. Escape to cancel."
         } else {
@@ -341,6 +400,34 @@ final class SelectionOverlayView: NSView {
         NSColor.black.withAlphaComponent(0.72).setFill()
         NSBezierPath(roundedRect: box, xRadius: 6, yRadius: 6).fill()
         message.draw(at: NSPoint(x: box.minX + padding, y: box.minY + padding / 2), withAttributes: labelAttributes)
+    }
+
+    private func drawSelectionRect(_ rect: NSRect, color: NSColor) {
+        color.withAlphaComponent(0.08).setFill()
+        rect.fill()
+        let border = NSBezierPath(rect: rect)
+        color.setStroke()
+        border.lineWidth = 2
+        border.stroke()
+
+        let sizeText = "\(Int(rect.width)) x \(Int(rect.height))"
+        sizeText.draw(
+            at: NSPoint(x: rect.minX + 8, y: max(rect.minY + 8, 8)),
+            withAttributes: labelAttributes
+        )
+    }
+
+    private func freezeCurrentScreen() {
+        guard let windowNumber = window?.windowNumber else { return }
+        let windowId = CGWindowID(windowNumber)
+        let displayId = displayID(for: targetScreen)
+        let displayBounds = displayId.map { CGDisplayBounds($0) } ?? targetScreen.frame
+        frozenImage = CGWindowListCreateImage(
+            displayBounds,
+            .optionOnScreenBelowWindow,
+            windowId,
+            [.bestResolution, .nominalResolution]
+        )
     }
 
     private func drawCrosshair() {
@@ -361,28 +448,71 @@ final class SelectionOverlayView: NSView {
     }
 
     private func result(for rect: NSRect) -> OverlayResult {
+        result(for: rect, destination: nil, timer: nil)
+    }
+
+    private func portalStripResult(destination: NSRect, timer: NSRect) -> OverlayResult {
+        result(for: destination.union(timer), destination: destination, timer: timer)
+    }
+
+    private func result(for rect: NSRect, destination: NSRect?, timer: NSRect?) -> OverlayResult {
         let displayId = displayID(for: targetScreen)
-        let displayBounds = displayId.map { CGDisplayBounds($0) } ?? targetScreen.frame
         let scale = targetScreen.backingScaleFactor
-        let globalX = displayBounds.minX + rect.minX
-        let globalY = displayBounds.minY + (targetScreen.frame.height - rect.maxY)
+        let mainCaptureRect = makeCaptureRect(for: rect)
         let anchor = anchorPoint.map { point in
-            NSPoint(
-                x: displayBounds.minX + point.x,
-                y: displayBounds.minY + (targetScreen.frame.height - point.y)
-            )
+            capturePoint(for: point)
         }
+        let destinationCapture = destination.map { makeCaptureRect(for: $0) }
+        let timerCapture = timer.map { makeCaptureRect(for: $0) }
 
         return OverlayResult(
-            x: Int(globalX.rounded()),
-            y: Int(globalY.rounded()),
-            width: Int(rect.width.rounded()),
-            height: Int(rect.height.rounded()),
+            x: Int(mainCaptureRect.minX.rounded()),
+            y: Int(mainCaptureRect.minY.rounded()),
+            width: Int(mainCaptureRect.width.rounded()),
+            height: Int(mainCaptureRect.height.rounded()),
             display_id: displayId.map { String($0) },
             scale_factor: Double(scale),
             anchor_x: anchor.map { Double($0.x) },
             anchor_y: anchor.map { Double($0.y) },
+            destination_x: destinationCapture.map { Int($0.minX.rounded()) },
+            destination_y: destinationCapture.map { Int($0.minY.rounded()) },
+            destination_width: destinationCapture.map { Int($0.width.rounded()) },
+            destination_height: destinationCapture.map { Int($0.height.rounded()) },
+            timer_x: timerCapture.map { Int($0.minX.rounded()) },
+            timer_y: timerCapture.map { Int($0.minY.rounded()) },
+            timer_width: timerCapture.map { Int($0.width.rounded()) },
+            timer_height: timerCapture.map { Int($0.height.rounded()) },
             cancelled: false
+        )
+    }
+
+    private func makeCaptureRect(for viewRect: NSRect) -> NSRect {
+        let displayId = displayID(for: targetScreen)
+        let displayBounds = displayId.map { CGDisplayBounds($0) } ?? targetScreen.frame
+
+        let result = NSRect(
+            x: displayBounds.minX + viewRect.minX,
+            y: displayBounds.minY + (targetScreen.frame.height - viewRect.maxY),
+            width: viewRect.width,
+            height: viewRect.height
+        )
+
+        fputs(
+            "[selection-debug] viewRect=\(viewRect) targetScreen.frame=\(targetScreen.frame) displayBounds=\(displayBounds) captureRect=\(result)\n",
+            stderr
+        )
+        fflush(stderr)
+
+        return result
+    }
+
+    private func capturePoint(for viewPoint: NSPoint) -> NSPoint {
+        let displayId = displayID(for: targetScreen)
+        let displayBounds = displayId.map { CGDisplayBounds($0) } ?? targetScreen.frame
+
+        return NSPoint(
+            x: displayBounds.minX + viewPoint.x,
+            y: displayBounds.minY + (targetScreen.frame.height - viewPoint.y)
         )
     }
 

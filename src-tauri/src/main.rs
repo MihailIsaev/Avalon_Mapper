@@ -1,4 +1,4 @@
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -708,6 +708,14 @@ struct OverlaySelection {
     scale_factor: Option<f64>,
     anchor_x: Option<f64>,
     anchor_y: Option<f64>,
+    destination_x: Option<i32>,
+    destination_y: Option<i32>,
+    destination_width: Option<i32>,
+    destination_height: Option<i32>,
+    timer_x: Option<i32>,
+    timer_y: Option<i32>,
+    timer_width: Option<i32>,
+    timer_height: Option<i32>,
     cancelled: bool,
 }
 
@@ -826,7 +834,7 @@ fn main() {
                 .join("captures");
             fs::create_dir_all(&capture_dir)
                 .map_err(|err| format!("Could not create capture directory: {err}"))?;
-            let conn = Connection::open(&db_path)
+            let conn = open_database(&db_path)
                 .map_err(|err| format!("Could not open SQLite database: {err}"))?;
             initialize_schema(&conn).map_err(|err| format!("Could not initialize SQLite: {err}"))?;
             import_static_route_graph(&conn).map_err(|err| format!("Could not import static route graph: {err}"))?;
@@ -995,7 +1003,27 @@ fn import_static_route_graph(conn: &Connection) -> Result<(), String> {
         )
         .map_err(db_err)?;
     }
+    let manual_royal_city_edges = [
+        // Thetford royal continent exits
+        ("Thetford", "Swamp Cross"),
+        ("Thetford", "Willow Wood"),
 
+        // Fort Sterling royal continent exits
+        ("Fort Sterling", "Mountain Cross"),
+
+        // Martlock royal continent exits
+        ("Martlock", "Mountain Cross"),
+
+        // Lymhurst royal continent exits
+        ("Lymhurst", "Forest Cross"),
+
+        // Bridgewatch royal continent exits
+        ("Bridgewatch", "Steppe Cross"),
+    ];
+
+    for (a, b) in manual_royal_city_edges {
+        insert_manual_route_static_edge(&tx, a, b, "manual_royal_city")?;
+    }
     tx.commit().map_err(db_err)?;
 
     let locations_count: i64 = conn
@@ -1292,7 +1320,67 @@ fn chest_size_from_properties(properties: &[i64]) -> String {
     }
 }
 
+fn open_database(path: &Path) -> rusqlite::Result<Connection> {
+    let conn = Connection::open(path)?;
+    configure_database_connection(&conn)?;
+    Ok(conn)
+}
+
+fn configure_database_connection(conn: &Connection) -> rusqlite::Result<()> {
+    conn.busy_timeout(StdDuration::from_secs(5))?;
+    conn.pragma_update(None, "busy_timeout", 5000)?;
+    Ok(())
+}
+
+fn insert_manual_route_static_edge(
+    conn: &Connection,
+    a: &str,
+    b: &str,
+    source: &str,
+) -> Result<(), String> {
+    let a_norm = normalize_location_name(a);
+    let b_norm = normalize_location_name(b);
+
+    conn.execute(
+        r#"
+        INSERT INTO route_static_locations (normalized_name, name)
+        VALUES (?1, ?2)
+        ON CONFLICT(normalized_name) DO UPDATE SET name = excluded.name
+        "#,
+        params![a_norm, a],
+    )
+    .map_err(db_err)?;
+
+    conn.execute(
+        r#"
+        INSERT INTO route_static_locations (normalized_name, name)
+        VALUES (?1, ?2)
+        ON CONFLICT(normalized_name) DO UPDATE SET name = excluded.name
+        "#,
+        params![b_norm, b],
+    )
+    .map_err(db_err)?;
+
+    let (from, to) = if a_norm <= b_norm {
+        (a_norm, b_norm)
+    } else {
+        (b_norm, a_norm)
+    };
+
+    conn.execute(
+        r#"
+        INSERT OR IGNORE INTO route_static_edges (from_normalized, to_normalized, source)
+        VALUES (?1, ?2, ?3)
+        "#,
+        params![from, to, source],
+    )
+    .map_err(db_err)?;
+
+    Ok(())
+}
+
 fn initialize_schema(conn: &Connection) -> rusqlite::Result<()> {
+    configure_database_connection(conn)?;
     conn.execute_batch(
         r#"
         PRAGMA foreign_keys = ON;
@@ -1642,11 +1730,15 @@ fn save_region(
     key: String,
     region: RegionInput,
 ) -> Result<Region, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
+    save_region_with_conn(&conn, key, region)
+}
+
+fn save_region_with_conn(conn: &Connection, key: String, region: RegionInput) -> Result<Region, String> {
     if region.width <= 0 || region.height <= 0 {
         return Err("Region width and height must be positive".to_string());
     }
 
-    let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
     conn.execute(
         r#"
         INSERT INTO regions (key, x, y, width, height, display_id, scale_factor, anchor_x, anchor_y)
@@ -2277,20 +2369,68 @@ fn run_overlay_selection(
     if selection.cancelled {
         return Err("Overlay selection cancelled".to_string());
     }
-    save_region(
-        state,
-        key,
+    let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
+    let base = save_region_with_conn(
+        &conn,
+        key.clone(),
         RegionInput {
             x: selection.x,
             y: selection.y,
             width: selection.width,
             height: selection.height,
-            display_id: selection.display_id,
+            display_id: selection.display_id.clone(),
             scale_factor: selection.scale_factor,
             anchor_x: selection.anchor_x,
             anchor_y: selection.anchor_y,
         },
-    )
+    )?;
+
+    if key == "portal_tooltip" && mode == "portal-strips" {
+        if let (Some(x), Some(y), Some(width), Some(height)) = (
+            selection.destination_x,
+            selection.destination_y,
+            selection.destination_width,
+            selection.destination_height,
+        ) {
+            save_region_with_conn(
+                &conn,
+                "portal_tooltip_destination".to_string(),
+                RegionInput {
+                    x,
+                    y,
+                    width,
+                    height,
+                    display_id: selection.display_id.clone(),
+                    scale_factor: selection.scale_factor,
+                    anchor_x: selection.anchor_x,
+                    anchor_y: selection.anchor_y,
+                },
+            )?;
+        }
+        if let (Some(x), Some(y), Some(width), Some(height)) = (
+            selection.timer_x,
+            selection.timer_y,
+            selection.timer_width,
+            selection.timer_height,
+        ) {
+            save_region_with_conn(
+                &conn,
+                "portal_tooltip_timer".to_string(),
+                RegionInput {
+                    x,
+                    y,
+                    width,
+                    height,
+                    display_id: selection.display_id.clone(),
+                    scale_factor: selection.scale_factor,
+                    anchor_x: selection.anchor_x,
+                    anchor_y: selection.anchor_y,
+                },
+            )?;
+        }
+    }
+
+    Ok(base)
 }
 
 #[tauri::command]
@@ -2449,7 +2589,7 @@ fn run_native_overlay(app: &AppHandle, mode: &str) -> Result<OverlaySelection, S
     if !cfg!(any(target_os = "macos", target_os = "windows")) {
         return Err("Native overlay helper is implemented for macOS and Windows".to_string());
     }
-    if mode != "region" && mode != "portal-size" && mode != "diagnostic" {
+    if mode != "region" && mode != "portal-size" && mode != "portal-strips" && mode != "diagnostic" {
         return Err("Unknown overlay mode".to_string());
     }
 
@@ -2638,7 +2778,7 @@ fn spawn_map_overlay_stdout_reader(
             let Some(event) = value.get("event").and_then(|event| event.as_str()) else {
                 continue;
             };
-            if let Ok(mut conn) = Connection::open(&db_path) {
+            if let Ok(mut conn) = open_database(&db_path) {
                 match event {
                     "set_shortcut_depth" => {
                         let value = value
@@ -2749,7 +2889,7 @@ fn spawn_map_overlay_stdout_reader(
                         );
                     }
                     "undo_last_action" => {
-                        if let Ok(conn) = Connection::open(&db_path) {
+                        if let Ok(conn) = open_database(&db_path) {
                             let _ = undo_last_graph_action_inner(&conn);
                             if let Ok(data) = build_map_overlay_data_from_conn(&conn) {
                                 let _ = send_map_overlay_command_direct(&overlay, json!({ "type": "data", "data": data }));
@@ -3465,19 +3605,27 @@ fn capture_portal_destination_inner(app: &AppHandle, state: &AppState) -> Result
     let total_started = Instant::now();
     let region_started = Instant::now();
     eprintln!("[capture-timing] kind=portal phase=load_region start");
-    let region = {
+    let (region, strip_regions) = {
         let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
-        load_region_by_key(&conn, "portal_tooltip")?
-            .ok_or_else(|| "Configure the portal tooltip box before capturing".to_string())?
+        let region = load_region_by_key(&conn, "portal_tooltip")?
+            .ok_or_else(|| "Configure the portal tooltip box before capturing".to_string())?;
+        let destination = load_region_by_key(&conn, "portal_tooltip_destination")?;
+        let timer = load_region_by_key(&conn, "portal_tooltip_timer")?;
+        let strip_regions = destination.zip(timer);
+        (region, strip_regions)
     };
     eprintln!(
         "[capture-timing] kind=portal phase=load_region ms={} x={} y={} width={} height={} anchor=({:?},{:?})",
         region_started.elapsed().as_millis(), region.x, region.y, region.width, region.height, region.anchor_x, region.anchor_y
     );
     let started = Instant::now();
-    let portal_anchor = region.anchor_x.zip(region.anchor_y);
-    let center_cursor = portal_anchor.is_none();
-    let ocr = run_capture_ocr(app, state, "portal", &region, center_cursor, portal_anchor)?;
+    let ocr = if let Some((destination_region, timer_region)) = strip_regions {
+        run_portal_strip_capture_ocr(app, state, &destination_region, &timer_region)?
+    } else {
+        let portal_anchor = region.anchor_x.zip(region.anchor_y);
+        let center_cursor = portal_anchor.is_none();
+        run_capture_ocr(app, state, "portal", &region, center_cursor, portal_anchor)?
+    };
     let capture_ms = started.elapsed().as_millis() as i64;
     eprintln!("[capture-timing] kind=portal phase=capture_ocr ms={capture_ms}");
     let mut conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
@@ -3489,6 +3637,56 @@ fn capture_portal_destination_inner(app: &AppHandle, state: &AppState) -> Result
         total_started.elapsed().as_millis()
     );
     outcome
+}
+
+fn run_portal_strip_capture_ocr(
+    app: &AppHandle,
+    state: &AppState,
+    destination_region: &Region,
+    timer_region: &Region,
+) -> Result<CaptureOcrResult, String> {
+    eprintln!(
+        "[capture-timing] kind=portal phase=strip_regions destination={}x{} timer={}x{}",
+        destination_region.width, destination_region.height, timer_region.width, timer_region.height
+    );
+    let destination = run_capture_ocr(
+        app,
+        state,
+        "portal",
+        destination_region,
+        false,
+        None,
+    )?;
+    let timer = run_capture_ocr(
+        app,
+        state,
+        "portal",
+        timer_region,
+        false,
+        None,
+    )?;
+    Ok(combine_portal_strip_ocr(destination, timer))
+}
+
+fn combine_portal_strip_ocr(destination: CaptureOcrResult, timer: CaptureOcrResult) -> CaptureOcrResult {
+    let text = format!(
+        "Road of Avalon to\n{}\nCloses in {}",
+        destination.text.trim(),
+        timer.text.trim()
+    );
+    let mut lines = destination.lines;
+    lines.extend(timer.lines);
+    CaptureOcrResult {
+        text,
+        confidence: destination.confidence.or(timer.confidence),
+        engine: format!("{}/strip", destination.engine),
+        image_path: format!("{}|{}", destination.image_path, timer.image_path),
+        width: destination.width.max(timer.width),
+        height: destination.height + timer.height,
+        duration_ms: destination.duration_ms + timer.duration_ms,
+        screen_recording_permission: destination.screen_recording_permission && timer.screen_recording_permission,
+        lines,
+    }
 }
 
 fn run_capture_ocr(
@@ -3883,7 +4081,7 @@ fn handle_hotkey_capture(
         "[capture-hotkey] {kind} capture requested from overlay hotkey pending={}",
         HotkeyCaptureGuard::pending_count()
     );
-    let mut conn = Connection::open(db_path).map_err(db_err)?;
+    let mut conn = open_database(db_path).map_err(db_err)?;
     initialize_schema(&conn).map_err(db_err)?;
     let region_started = Instant::now();
     let region_key = if kind == "portal" {
@@ -3893,6 +4091,12 @@ fn handle_hotkey_capture(
     };
     let region = load_region_by_key(&conn, region_key)?
         .ok_or_else(|| format!("Missing {region_key} region"))?;
+    let strip_regions = if kind == "portal" {
+        load_region_by_key(&conn, "portal_tooltip_destination")?
+            .zip(load_region_by_key(&conn, "portal_tooltip_timer")?)
+    } else {
+        None
+    };
     eprintln!(
         "[capture-timing] kind={kind} phase=load_region ms={} key={region_key} x={} y={} width={} height={}",
         region_started.elapsed().as_millis(), region.x, region.y, region.width, region.height
@@ -3902,17 +4106,28 @@ fn handle_hotkey_capture(
         let _ = send_map_overlay_command_direct(overlay, json!({ "type": "data", "data": data }));
     }
     let started = Instant::now();
-    let portal_anchor = if kind == "portal" { region.anchor_x.zip(region.anchor_y) } else { None };
-    let center_cursor = if kind == "portal" { portal_anchor.is_none() } else { false };
-    let ocr = match run_capture_ocr_with_helper(
-        helper_path,
-        capture_dir,
-        paddle_ocr,
-        kind,
-        &region,
-        center_cursor,
-        portal_anchor,
-    ) {
+    let ocr_result = if let Some((destination_region, timer_region)) = strip_regions {
+        run_portal_strip_capture_ocr_with_helper(
+            helper_path,
+            capture_dir,
+            paddle_ocr,
+            &destination_region,
+            &timer_region,
+        )
+    } else {
+        let portal_anchor = if kind == "portal" { region.anchor_x.zip(region.anchor_y) } else { None };
+        let center_cursor = if kind == "portal" { portal_anchor.is_none() } else { false };
+        run_capture_ocr_with_helper(
+            helper_path,
+            capture_dir,
+            paddle_ocr,
+            kind,
+            &region,
+            center_cursor,
+            portal_anchor,
+        )
+    };
+    let ocr = match ocr_result {
         Ok(ocr) => ocr,
         Err(err) => {
             let _ = set_setting(&conn, "last_capture_status", &format!("{kind} capture failed: {err}"));
@@ -3955,6 +4170,38 @@ fn handle_hotkey_capture(
         trigger_sync_after_local_change(db_path.to_path_buf(), Arc::clone(overlay));
     }
     Ok(())
+}
+
+fn run_portal_strip_capture_ocr_with_helper(
+    helper_path: &Path,
+    capture_dir: &Path,
+    paddle_ocr: &Arc<Mutex<Option<PaddleOcrProcess>>>,
+    destination_region: &Region,
+    timer_region: &Region,
+) -> Result<CaptureOcrResult, String> {
+    eprintln!(
+        "[capture-timing] kind=portal phase=strip_regions destination={}x{} timer={}x{}",
+        destination_region.width, destination_region.height, timer_region.width, timer_region.height
+    );
+    let destination = run_capture_ocr_with_helper(
+        helper_path,
+        capture_dir,
+        paddle_ocr,
+        "portal",
+        destination_region,
+        false,
+        None,
+    )?;
+    let timer = run_capture_ocr_with_helper(
+        helper_path,
+        capture_dir,
+        paddle_ocr,
+        "portal",
+        timer_region,
+        false,
+        None,
+    )?;
+    Ok(combine_portal_strip_ocr(destination, timer))
 }
 
 fn run_capture_ocr_with_helper(
@@ -5743,7 +5990,11 @@ fn upsert_edge(
 
     let existing_id = conn
         .query_row(
-            "SELECT id FROM edges WHERE from_location_id = ?1 AND to_location_id = ?2",
+            r#"
+            SELECT id FROM edges
+            WHERE (from_location_id = ?1 AND to_location_id = ?2)
+               OR (from_location_id = ?2 AND to_location_id = ?1)
+            "#,
             params![from_location_id, to_location_id],
             |row| row.get::<_, i64>(0),
         )
@@ -5877,7 +6128,7 @@ fn run_sync_once(
     db_path: &Path,
     overlay: &Arc<Mutex<Option<MapOverlayProcess>>>,
 ) -> Result<(), String> {
-    let mut conn = Connection::open(db_path).map_err(db_err)?;
+    let mut conn = open_database(db_path).map_err(db_err)?;
     initialize_schema(&conn).map_err(db_err)?;
     let settings = read_sync_settings(&conn)?;
     if !settings.enabled || settings.server_url.trim().is_empty() {
@@ -5947,6 +6198,13 @@ fn apply_sync_edge(conn: &mut Connection, edge: &SyncEdgePayload) -> Result<bool
     }
 
     if edge.status.as_deref() == Some("deleted") {
+        if remote_delete_is_stale(conn, from_name, to_name, edge.last_seen_at.as_deref())? {
+            eprintln!(
+                "[sync] ignored stale remote delete for {from_name} -> {to_name} remote_last_seen={:?}",
+                edge.last_seen_at
+            );
+            return Ok(false);
+        }
         return delete_edge_by_locations(conn, from_name, to_name);
     }
 
@@ -5986,6 +6244,60 @@ fn apply_sync_edge(conn: &mut Connection, edge: &SyncEdgePayload) -> Result<bool
     )?;
     tx.commit().map_err(db_err)?;
     Ok(changed)
+}
+
+fn remote_delete_is_stale(
+    conn: &Connection,
+    from_name: &str,
+    to_name: &str,
+    remote_last_seen_at: Option<&str>,
+) -> Result<bool, String> {
+    let Some(remote_last_seen_at) = remote_last_seen_at else {
+        return Ok(false);
+    };
+    let from_normalized = normalize_location_name(from_name);
+    let to_normalized = normalize_location_name(to_name);
+    if from_normalized.is_empty() || to_normalized.is_empty() {
+        return Ok(false);
+    }
+    let (from_normalized, to_normalized) =
+        canonicalize_normalized_edge_pair(&from_normalized, &to_normalized);
+
+    let local = conn
+        .query_row(
+            r#"
+            SELECT e.status, e.last_seen_at
+            FROM edges e
+            JOIN locations lf ON lf.id = e.from_location_id
+            JOIN locations lt ON lt.id = e.to_location_id
+            WHERE (
+                lf.normalized_name = ?1 AND lt.normalized_name = ?2
+            )
+            OR (
+                lf.normalized_name = ?2 AND lt.normalized_name = ?1
+            )
+            LIMIT 1
+            "#,
+            params![from_normalized, to_normalized],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )
+        .optional()
+        .map_err(db_err)?;
+
+    let Some((local_status, local_last_seen_at)) = local else {
+        return Ok(false);
+    };
+    Ok(local_status != "deleted" && timestamp_is_newer(&local_last_seen_at, remote_last_seen_at))
+}
+
+fn timestamp_is_newer(left: &str, right: &str) -> bool {
+    match (
+        DateTime::parse_from_rfc3339(left),
+        DateTime::parse_from_rfc3339(right),
+    ) {
+        (Ok(left), Ok(right)) => left > right,
+        _ => left > right,
+    }
 }
 
 fn upsert_synced_edge(
@@ -7803,6 +8115,39 @@ mod tests {
         assert_eq!(rows[1].0, "portal");
         assert_eq!(rows[1].1.as_deref(), Some("/tmp/portal.png"));
         assert!(rows[1].2.as_deref().unwrap().contains("portal_tooltip_v1"));
+    }
+
+    #[test]
+    fn stale_remote_delete_does_not_remove_readded_local_edge() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        initialize_schema(&conn).unwrap();
+
+        let from_id = upsert_location(&conn, "Test From", "test from", "avalon", false).unwrap();
+        let to_id = upsert_location(&conn, "Test To", "test to", "avalon", false).unwrap();
+        let edge_id = upsert_edge(&conn, from_id, to_id, None).unwrap();
+        assert!(delete_edge_by_locations(&mut conn, "Test From", "Test To").unwrap());
+
+        let readded_id = upsert_edge(&conn, to_id, from_id, None).unwrap();
+        assert_eq!(readded_id, edge_id);
+
+        let stale_delete = SyncEdgePayload {
+            from_name: "Test From".to_string(),
+            to_name: "Test To".to_string(),
+            from_normalized: Some("test from".to_string()),
+            to_normalized: Some("test to".to_string()),
+            first_seen_at: None,
+            last_seen_at: Some("2000-01-01T00:00:00Z".to_string()),
+            ttl_seconds: None,
+            expires_at: None,
+            observations_count: None,
+            source: Some("deleted".to_string()),
+            status: Some("deleted".to_string()),
+        };
+
+        assert!(!apply_sync_edge(&mut conn, &stale_delete).unwrap());
+        let edges = load_edges(&conn).unwrap();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].status, "active");
     }
 
     #[test]
