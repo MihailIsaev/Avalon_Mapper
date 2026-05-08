@@ -251,7 +251,10 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or "0")
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            edge = self.store.upsert_edge(payload)
+            if str(payload.get("action") or payload.get("_method") or "").strip().lower() == "delete":
+                edge = self.store.delete_edge(payload)
+            else:
+                edge = self.store.upsert_edge(payload)
             self.write_json({"ok": True, "edge": edge})
         except Exception as exc:
             self.write_json({"ok": False, "error": str(exc)}, status=400)

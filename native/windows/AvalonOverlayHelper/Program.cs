@@ -1062,10 +1062,10 @@ internal sealed class MapOverlayForm : Form
 
         if (e.Button == MouseButtons.Right)
         {
-            var hit = _nodeRects.LastOrDefault(n => Contains(n.Rect, e.Location));
-            if (hit.Id != 0)
+            var rightClickHit = _nodeRects.LastOrDefault(n => Contains(n.Rect, e.Location));
+            if (rightClickHit.Id != 0)
             {
-                var location = _data.Locations.FirstOrDefault(item => item.Id == hit.Id);
+                var location = _data.Locations.FirstOrDefault(item => item.Id == rightClickHit.Id);
                 if (location is not null && string.Equals(location.ZoneType, "avalon", StringComparison.OrdinalIgnoreCase))
                 {
                     _avalonInfoLocationId = location.Id;
@@ -1318,9 +1318,9 @@ internal sealed class MapOverlayForm : Form
     private RectangleF RouteFromRect() => new(14, Height - 74, 105, 24);
     private RectangleF RouteToRect() => new(124, Height - 74, 105, 24);
     private RectangleF FindButtonRect() => new(234, Height - 74, 48, 24);
-    private RectangleF DelRoutesButtonRect() => new(288, Height - 74, 72, 24);
+    private RectangleF DelRoutesButtonRect() => new(288, Height - 74, 48, 24);
     private RectangleF CopyButtonRect() => new(234, Height - 24, 48, 22);
-    private RectangleF RouteCountRect() => new(288, Height - 24, 72, 22);
+    private RectangleF RouteCountRect() => new(288, Height - 24, 48, 22);
     private PointF LastPortalTextPoint() => new(14, Height - 45);
     private RectangleF UndoButtonRect() => new(Math.Max(14, Width - 62), 7, 48, 24);
     private RectangleF PassClicksButtonRect() => new(Math.Max(14, Width - 156), 7, 88, 24);
@@ -1566,17 +1566,25 @@ internal static class CaptureOcr
         var width = Math.Max(1, Args.IntValue(args, "--width", 320));
         var height = Math.Max(1, Args.IntValue(args, "--height", 180));
 
+        var rectStarted = Stopwatch.StartNew();
         var rect = CaptureRect(args, width, height);
+        Console.Error.WriteLine($"[capture-helper-timing] kind={kind} phase=rect ms={rectStarted.ElapsedMilliseconds} rect={rect.Left},{rect.Top},{rect.Width}x{rect.Height}");
+        var dirStarted = Stopwatch.StartNew();
         Directory.CreateDirectory(outputDir);
+        Console.Error.WriteLine($"[capture-helper-timing] kind={kind} phase=ensure_output_dir ms={dirStarted.ElapsedMilliseconds} dir={outputDir}");
 
+        var captureStarted = Stopwatch.StartNew();
         using var bitmap = new Bitmap(Math.Max(1, rect.Width), Math.Max(1, rect.Height));
         using (var graphics = Graphics.FromImage(bitmap))
         {
             graphics.CopyFromScreen(rect.Left, rect.Top, 0, 0, rect.Size, CopyPixelOperation.SourceCopy);
         }
+        Console.Error.WriteLine($"[capture-helper-timing] kind={kind} phase=screen_capture ms={captureStarted.ElapsedMilliseconds} size={bitmap.Width}x{bitmap.Height}");
 
         var imagePath = Path.Combine(outputDir, $"{SanitizeFileName(kind)}-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.png");
+        var saveStarted = Stopwatch.StartNew();
         bitmap.Save(imagePath, System.Drawing.Imaging.ImageFormat.Png);
+        Console.Error.WriteLine($"[capture-helper-timing] kind={kind} phase=save_png ms={saveStarted.ElapsedMilliseconds} total_ms={started.ElapsedMilliseconds} path={imagePath}");
 
         Program.WriteJson(new CaptureOcrResult(
             "",

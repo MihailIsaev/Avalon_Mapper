@@ -233,13 +233,10 @@ fn lookup_avalon_info(normalized_name: &str) -> AvalonInfo {
 
     let key = normalize_location_name(normalized_name);
 
-    map.get(&key).cloned().unwrap_or_else(|| {
-        eprintln!("[avalon-info] missing info for {normalized_name:?} normalized={key:?}");
-        AvalonInfo {
-            tiers: Vec::new(),
-            components: Vec::new(),
-            chests: Vec::new(),
-        }
+    map.get(&key).cloned().unwrap_or_else(|| AvalonInfo {
+        tiers: Vec::new(),
+        components: Vec::new(),
+        chests: Vec::new(),
     })
 }
 
@@ -971,6 +968,34 @@ fn import_static_route_graph(conn: &Connection) -> Result<(), String> {
         .map_err(db_err)?;
     }
 
+    for (city, portal) in city_portal_route_pairs() {
+        tx.execute(
+            r#"
+            INSERT INTO route_static_locations (normalized_name, name)
+            VALUES (?1, ?2), (?3, ?4)
+            ON CONFLICT(normalized_name) DO UPDATE SET
+                name = excluded.name
+            "#,
+            params![
+                city,
+                title_case_location_name(city),
+                portal,
+                title_case_location_name(portal)
+            ],
+        )
+        .map_err(db_err)?;
+
+        let (from, to) = if city <= portal { (city, portal) } else { (portal, city) };
+        tx.execute(
+            r#"
+            INSERT OR IGNORE INTO route_static_edges (from_normalized, to_normalized, source)
+            VALUES (?1, ?2, 'city_portal_patch')
+            "#,
+            params![from, to],
+        )
+        .map_err(db_err)?;
+    }
+
     tx.commit().map_err(db_err)?;
 
     let locations_count: i64 = conn
@@ -1502,14 +1527,45 @@ fn find_shortest_path(
 
     delete_expired_edges(&conn)?;
 
-    let from_norm = normalize_location_name(&from_location);
-    let to_norm = normalize_location_name(&to_location);
+    let from_query = from_location.trim();
+    let to_query = to_location.trim();
 
-    if from_norm.is_empty() || to_norm.is_empty() {
+    if from_query.is_empty() || to_query.is_empty() {
         return Err("Both locations are required".to_string());
     }
 
     let graph = build_route_graph(&conn)?;
+    let all_names = load_route_location_names(&conn)?;
+
+    let to_is_safe = is_safe_route_query(to_query);
+    let from_is_city = is_city_route_query(from_query);
+
+    let matched_to_norm = if to_is_safe {
+        None
+    } else {
+        Some(
+            match_route_location_name(to_query, &all_names)
+                .ok_or_else(|| format!("Could not match route destination: {to_query}"))?,
+        )
+    };
+
+    let from_norm = if from_is_city {
+        let destination = matched_to_norm
+            .as_deref()
+            .ok_or_else(|| "Route start 'city' requires a concrete destination".to_string())?;
+        nearest_city_route_target(&graph, destination)
+            .ok_or_else(|| format!("Could not find nearest city to {to_query}"))?
+    } else {
+        match_route_location_name(from_query, &all_names)
+            .ok_or_else(|| format!("Could not match route start: {from_query}"))?
+    };
+
+    let to_norm = if to_is_safe {
+        nearest_safe_route_target(&graph, &from_norm)
+            .ok_or_else(|| format!("Could not find nearest safe zone from {from_query}"))?
+    } else {
+        matched_to_norm.expect("matched_to_norm exists for non-safe route")
+    };
 
     let path = shortest_path_bfs(&graph, &from_norm, &to_norm);
 
@@ -1909,6 +1965,13 @@ fn build_route_graph(conn: &Connection) -> Result<std::collections::HashMap<Stri
         }
     }
 
+    add_city_portal_route_edges(&mut graph);
+
+    for neighbors in graph.values_mut() {
+        neighbors.sort();
+        neighbors.dedup();
+    }
+
     Ok(graph)
 }
 
@@ -1923,6 +1986,33 @@ fn add_undirected_route_edge(
 
     graph.entry(a.clone()).or_default().push(b.clone());
     graph.entry(b).or_default().push(a);
+}
+
+fn add_city_portal_route_edges(graph: &mut std::collections::HashMap<String, Vec<String>>) {
+    for (city, portal) in city_portal_route_pairs() {
+        add_undirected_route_edge(graph, city.to_string(), portal.to_string());
+    }
+}
+
+fn city_portal_route_pairs() -> &'static [(&'static str, &'static str)] {
+    &[
+        ("bridgewatch", "bridgewatch portal"),
+        ("fort sterling", "fort sterling portal"),
+        ("lymhurst", "lymhurst portal"),
+        ("martlock", "martlock portal"),
+        ("thetford", "thetford portal"),
+    ]
+}
+
+fn route_city_names() -> &'static [&'static str] {
+    &[
+        "bridgewatch",
+        "caerleon",
+        "fort sterling",
+        "lymhurst",
+        "martlock",
+        "thetford",
+    ]
 }
 
 fn shortest_path_bfs(
@@ -1976,6 +2066,72 @@ fn shortest_path_bfs(
     }
 
     None
+}
+
+fn nearest_route_target<F>(
+    graph: &std::collections::HashMap<String, Vec<String>>,
+    from: &str,
+    mut is_target: F,
+) -> Option<String>
+where
+    F: FnMut(&str) -> bool,
+{
+    let mut queue = std::collections::VecDeque::<String>::new();
+    let mut visited = std::collections::HashSet::<String>::new();
+
+    visited.insert(from.to_string());
+    queue.push_back(from.to_string());
+
+    while let Some(current) = queue.pop_front() {
+        if current != from && is_target(&current) {
+            return Some(current);
+        }
+
+        let mut neighbors = graph.get(&current).cloned().unwrap_or_default();
+        neighbors.sort();
+
+        for neighbor in neighbors {
+            if visited.insert(neighbor.clone()) {
+                queue.push_back(neighbor);
+            }
+        }
+    }
+
+    None
+}
+
+fn nearest_safe_route_target(
+    graph: &std::collections::HashMap<String, Vec<String>>,
+    from: &str,
+) -> Option<String> {
+    if matches!(infer_zone_type_from_name(from).as_str(), "blue" | "yellow") {
+        return Some(from.to_string());
+    }
+
+    nearest_route_target(graph, from, |normalized| {
+        matches!(infer_zone_type_from_name(normalized).as_str(), "blue" | "yellow")
+    })
+}
+
+fn nearest_city_route_target(
+    graph: &std::collections::HashMap<String, Vec<String>>,
+    from: &str,
+) -> Option<String> {
+    let cities = route_city_names();
+
+    if cities.contains(&from) {
+        return Some(from.to_string());
+    }
+
+    nearest_route_target(graph, from, |normalized| cities.contains(&normalized))
+}
+
+fn is_safe_route_query(query: &str) -> bool {
+    normalize_location_name(query) == "safe"
+}
+
+fn is_city_route_query(query: &str) -> bool {
+    normalize_location_name(query) == "city"
 }
 
 fn resolve_route_location_name(conn: &Connection, normalized: &str) -> Result<String, String> {
@@ -2631,6 +2787,7 @@ fn spawn_map_overlay_stdout_reader(
                                     let (from_normalized, to_normalized) =
                                         canonicalize_normalized_edge_pair(&from_normalized, &to_normalized);
                                     let payload = json!({
+                                        "action": "delete",
                                         "from_name": edge.from_location_name,
                                         "to_name": edge.to_location_name,
                                         "from_normalized": from_normalized,
@@ -2644,7 +2801,24 @@ fn spawn_map_overlay_stdout_reader(
                                         Some(&body),
                                         Some(&sync_settings.write_token),
                                     ) {
-                                        eprintln!("[delete-edge] sync delete failed: {err}");
+                                        if err.contains("HTTP 501")
+                                            || err.contains("HTTP 405")
+                                            || err.contains("Unsupported method")
+                                        {
+                                            eprintln!(
+                                                "[delete-edge] sync DELETE unsupported, retrying delete via POST"
+                                            );
+                                            if let Err(post_err) = http_json_request(
+                                                "POST",
+                                                &delete_url,
+                                                Some(&body),
+                                                Some(&sync_settings.write_token),
+                                            ) {
+                                                eprintln!("[delete-edge] sync delete POST fallback failed: {post_err}");
+                                            }
+                                        } else {
+                                            eprintln!("[delete-edge] sync delete failed: {err}");
+                                        }
                                     }
                                 }
                             }
@@ -3260,41 +3434,61 @@ fn ensure_windows_overlay_helper(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 fn capture_current_location_inner(app: &AppHandle, state: &AppState) -> Result<CaptureOutcome, String> {
-    eprintln!("[capture] loading current_location region");
+    let total_started = Instant::now();
+    let region_started = Instant::now();
+    eprintln!("[capture-timing] kind=current phase=load_region start");
     let region = {
         let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
         load_region_by_key(&conn, "current_location")?
             .ok_or_else(|| "Select the current-location region before capturing".to_string())?
     };
     eprintln!(
-        "[capture] current_location region x={} y={} width={} height={}",
-        region.x, region.y, region.width, region.height
+        "[capture-timing] kind=current phase=load_region ms={} x={} y={} width={} height={}",
+        region_started.elapsed().as_millis(), region.x, region.y, region.width, region.height
     );
     let started = Instant::now();
     let ocr = run_capture_ocr(app, state, "current", &region, false, None)?;
     let capture_ms = started.elapsed().as_millis() as i64;
+    eprintln!("[capture-timing] kind=current phase=capture_ocr ms={capture_ms}");
     let mut conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
-    apply_current_location_capture(&mut conn, &ocr, capture_ms)
+    let apply_started = Instant::now();
+    let outcome = apply_current_location_capture(&mut conn, &ocr, capture_ms);
+    eprintln!(
+        "[capture-timing] kind=current phase=apply_result ms={} total_ms={}",
+        apply_started.elapsed().as_millis(),
+        total_started.elapsed().as_millis()
+    );
+    outcome
 }
 
 fn capture_portal_destination_inner(app: &AppHandle, state: &AppState) -> Result<CaptureOutcome, String> {
-    eprintln!("[capture] loading portal_tooltip region");
+    let total_started = Instant::now();
+    let region_started = Instant::now();
+    eprintln!("[capture-timing] kind=portal phase=load_region start");
     let region = {
         let conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
         load_region_by_key(&conn, "portal_tooltip")?
             .ok_or_else(|| "Configure the portal tooltip box before capturing".to_string())?
     };
     eprintln!(
-        "[capture] portal_tooltip region x={} y={} width={} height={} anchor=({:?},{:?})",
-        region.x, region.y, region.width, region.height, region.anchor_x, region.anchor_y
+        "[capture-timing] kind=portal phase=load_region ms={} x={} y={} width={} height={} anchor=({:?},{:?})",
+        region_started.elapsed().as_millis(), region.x, region.y, region.width, region.height, region.anchor_x, region.anchor_y
     );
     let started = Instant::now();
     let portal_anchor = region.anchor_x.zip(region.anchor_y);
     let center_cursor = portal_anchor.is_none();
     let ocr = run_capture_ocr(app, state, "portal", &region, center_cursor, portal_anchor)?;
     let capture_ms = started.elapsed().as_millis() as i64;
+    eprintln!("[capture-timing] kind=portal phase=capture_ocr ms={capture_ms}");
     let mut conn = state.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
-    apply_portal_capture(&mut conn, &ocr, capture_ms)
+    let apply_started = Instant::now();
+    let outcome = apply_portal_capture(&mut conn, &ocr, capture_ms);
+    eprintln!(
+        "[capture-timing] kind=portal phase=apply_result ms={} total_ms={}",
+        apply_started.elapsed().as_millis(),
+        total_started.elapsed().as_millis()
+    );
+    outcome
 }
 
 fn run_capture_ocr(
@@ -3305,8 +3499,14 @@ fn run_capture_ocr(
     center_cursor: bool,
     portal_anchor: Option<(f64, f64)>,
 ) -> Result<CaptureOcrResult, String> {
+    let total_started = Instant::now();
+    let helper_resolve_started = Instant::now();
     let helper = ensure_native_overlay_helper(app)?;
-    eprintln!("[capture] running helper={} kind={kind}", helper.display());
+    eprintln!(
+        "[capture-timing] kind={kind} phase=resolve_helper ms={} helper={}",
+        helper_resolve_started.elapsed().as_millis(),
+        helper.display()
+    );
     fs::create_dir_all(&state.capture_dir)
         .map_err(|err| format!("Could not create capture directory: {err}"))?;
     let mut command = Command::new(helper);
@@ -3349,9 +3549,11 @@ fn run_capture_ocr(
     if let Some(display_id) = &region.display_id {
         command.arg("--display-id").arg(display_id);
     }
+    let helper_started = Instant::now();
     let output = command
         .output()
         .map_err(|err| format!("Could not run capture helper: {err}"))?;
+    let helper_ms = helper_started.elapsed().as_millis();
     forward_child_stderr("capture-helper", &output.stderr);
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -3368,13 +3570,25 @@ fn run_capture_ocr(
         .ok_or_else(|| "Capture helper returned no data".to_string())?;
     let result = serde_json::from_str::<CaptureOcrResult>(json_line)
         .map_err(|err| format!("Capture helper returned invalid data: {err}"))?;
+    eprintln!(
+        "[capture-timing] kind={kind} phase=helper_process ms={helper_ms} helper_capture_ms={} image={} size={}x{}",
+        result.duration_ms, result.image_path, result.width, result.height
+    );
     if !result.screen_recording_permission {
         return Err(
             "macOS Screen Recording permission is missing. Enable it for Avalon Mapper OCR in System Settings > Privacy & Security > Screen Recording, then restart the app."
                 .to_string(),
         );
     }
+    let ocr_started = Instant::now();
     let paddle = run_paddle_ocr(&state.paddle_ocr, &result.image_path, kind)?;
+    let ocr_ms = ocr_started.elapsed().as_millis();
+    eprintln!(
+        "[capture-timing] kind={kind} phase=ocr_worker ms={ocr_ms} total_ms={} engine={} confidence={:?}",
+        total_started.elapsed().as_millis(),
+        paddle.engine,
+        paddle.confidence
+    );
     eprintln!(
         "[capture] kind={kind} image={} size={}x{} capture_ms={} ocr_engine={} ocr_confidence={:?}",
         result.image_path,
@@ -3658,6 +3872,7 @@ fn handle_hotkey_capture(
     paddle_ocr: &Arc<Mutex<Option<PaddleOcrProcess>>>,
     kind: &str,
 ) -> Result<(), String> {
+    let total_started = Instant::now();
     let Some(_capture_guard) = HotkeyCaptureGuard::try_acquire() else {
         eprintln!(
             "[capture-hotkey] ignoring {kind} capture because capture queue is full ({MAX_HOTKEY_CAPTURE_QUEUE})"
@@ -3670,6 +3885,7 @@ fn handle_hotkey_capture(
     );
     let mut conn = Connection::open(db_path).map_err(db_err)?;
     initialize_schema(&conn).map_err(db_err)?;
+    let region_started = Instant::now();
     let region_key = if kind == "portal" {
         "portal_tooltip"
     } else {
@@ -3678,8 +3894,8 @@ fn handle_hotkey_capture(
     let region = load_region_by_key(&conn, region_key)?
         .ok_or_else(|| format!("Missing {region_key} region"))?;
     eprintln!(
-        "[capture-hotkey] region key={region_key} x={} y={} width={} height={}",
-        region.x, region.y, region.width, region.height
+        "[capture-timing] kind={kind} phase=load_region ms={} key={region_key} x={} y={} width={} height={}",
+        region_started.elapsed().as_millis(), region.x, region.y, region.width, region.height
     );
     let _ = set_setting(&conn, "last_capture_status", &format!("{kind} capture running"));
     if let Ok(data) = build_map_overlay_data_from_conn(&conn) {
@@ -3706,6 +3922,8 @@ fn handle_hotkey_capture(
         }
     };
     let measured_ms = started.elapsed().as_millis() as i64;
+    eprintln!("[capture-timing] kind={kind} phase=capture_ocr ms={measured_ms}");
+    let apply_started = Instant::now();
     let result = if kind == "portal" {
         apply_portal_capture(&mut conn, &ocr, measured_ms)
     } else {
@@ -3719,8 +3937,19 @@ fn handle_hotkey_capture(
             &format!("{kind} capture failed: {err}"),
         );
     }
+    eprintln!(
+        "[capture-timing] kind={kind} phase=apply_result ms={} ok={}",
+        apply_started.elapsed().as_millis(),
+        should_sync
+    );
+    let overlay_started = Instant::now();
     let data = build_map_overlay_data_from_conn(&conn)?;
     send_map_overlay_command_direct(overlay, json!({ "type": "data", "data": data }))?;
+    eprintln!(
+        "[capture-timing] kind={kind} phase=overlay_update ms={} total_ms={}",
+        overlay_started.elapsed().as_millis(),
+        total_started.elapsed().as_millis()
+    );
     drop(conn);
     if should_sync {
         trigger_sync_after_local_change(db_path.to_path_buf(), Arc::clone(overlay));
@@ -3737,6 +3966,7 @@ fn run_capture_ocr_with_helper(
     center_cursor: bool,
     portal_anchor: Option<(f64, f64)>,
 ) -> Result<CaptureOcrResult, String> {
+    let total_started = Instant::now();
     fs::create_dir_all(capture_dir)
         .map_err(|err| format!("Could not create capture directory: {err}"))?;
     let mut command = Command::new(helper_path);
@@ -3783,9 +4013,11 @@ fn run_capture_ocr_with_helper(
         "[capture] running helper kind={kind} region={}x{} at {},{}",
         region.width, region.height, region.x, region.y
     );
+    let helper_started = Instant::now();
     let output = command
         .output()
         .map_err(|err| format!("Could not run capture helper: {err}"))?;
+    let helper_ms = helper_started.elapsed().as_millis();
     forward_child_stderr("capture-helper", &output.stderr);
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
@@ -3797,6 +4029,10 @@ fn run_capture_ocr_with_helper(
         .ok_or_else(|| "Capture helper returned no data".to_string())?;
     let result = serde_json::from_str::<CaptureOcrResult>(json_line)
         .map_err(|err| format!("Capture helper returned invalid data: {err}"))?;
+    eprintln!(
+        "[capture-timing] kind={kind} phase=helper_process ms={helper_ms} helper_capture_ms={} image={} size={}x{}",
+        result.duration_ms, result.image_path, result.width, result.height
+    );
     if !result.screen_recording_permission {
         return Err(
             "macOS Screen Recording permission is missing. Enable it for Avalon Mapper OCR in System Settings > Privacy & Security > Screen Recording, then restart the app."
@@ -3808,7 +4044,15 @@ fn run_capture_ocr_with_helper(
         "[capture] running ocr kind={paddle_kind} image={}",
         result.image_path
     );
+    let ocr_started = Instant::now();
     let paddle = run_paddle_ocr(paddle_ocr, &result.image_path, paddle_kind)?;
+    let ocr_ms = ocr_started.elapsed().as_millis();
+    eprintln!(
+        "[capture-timing] kind={kind} phase=ocr_worker ms={ocr_ms} total_ms={} engine={} confidence={:?}",
+        total_started.elapsed().as_millis(),
+        paddle.engine,
+        paddle.confidence
+    );
     eprintln!(
         "[capture] kind={kind} image={} size={}x{} capture_ms={} ocr_engine={} ocr_confidence={:?}",
         result.image_path,
@@ -3836,15 +4080,21 @@ fn run_paddle_ocr(
     image_path: &str,
     kind: &str,
 ) -> Result<OcrResult, String> {
+    let total_started = Instant::now();
+    let lock_started = Instant::now();
     let mut guard = paddle_ocr
         .lock()
         .map_err(|_| "Python OCR lock poisoned".to_string())?;
+    let lock_ms = lock_started.elapsed().as_millis();
+    let ensure_started = Instant::now();
     let process = ensure_paddle_ocr_process(&mut guard)?;
+    let ensure_ms = ensure_started.elapsed().as_millis();
     let request = serde_json::to_string(&json!({
         "kind": kind,
         "image_path": image_path,
     }))
     .map_err(|err| err.to_string())?;
+    let write_started = Instant::now();
     process
         .stdin
         .write_all(request.as_bytes())
@@ -3857,7 +4107,9 @@ fn run_paddle_ocr(
         .stdin
         .flush()
         .map_err(|err| format!("Could not flush Python OCR request: {err}"))?;
+    let write_ms = write_started.elapsed().as_millis();
 
+    let wait_started = Instant::now();
     let line = match process.stdout_rx.recv_timeout(StdDuration::from_secs(120)) {
         Ok(line) => line,
         Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -3878,6 +4130,7 @@ fn run_paddle_ocr(
             });
         }
     };
+    let wait_ms = wait_started.elapsed().as_millis();
     if line.trim().is_empty() {
         let status = process.child.try_wait().ok().flatten();
         *guard = None;
@@ -3902,6 +4155,10 @@ fn run_paddle_ocr(
         lines: parsed.lines.unwrap_or_default(),
     };
     eprintln!(
+        "[ocr-timing] kind={kind} lock_ms={lock_ms} ensure_ms={ensure_ms} write_ms={write_ms} wait_ms={wait_ms} total_ms={}",
+        total_started.elapsed().as_millis()
+    );
+    eprintln!(
         "[ocr] engine={} kind={kind} text={:?} confidence={:?} lines={:?}",
         result.engine,
         result.text,
@@ -3924,6 +4181,7 @@ fn ensure_paddle_ocr_process(
         false
     };
     if existing_alive {
+        eprintln!("[ocr-timing] phase=ensure_worker reused=true");
         return process
             .as_mut()
             .ok_or_else(|| "Could not access Python OCR worker".to_string());
@@ -3967,6 +4225,7 @@ fn ensure_paddle_ocr_process(
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|err| format!("Could not start Python OCR worker: {err}"))?;
+    let startup_started = Instant::now();
     let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
     if let Some(stderr) = child.stderr.take() {
         spawn_paddle_stderr_forwarder(stderr, ready_tx);
@@ -4036,6 +4295,10 @@ fn ensure_paddle_ocr_process(
             });
         }
     }
+    eprintln!(
+        "[ocr-timing] phase=ensure_worker reused=false startup_ms={}",
+        startup_started.elapsed().as_millis()
+    );
 
     *process = Some(PaddleOcrProcess {
         child,
@@ -4866,15 +5129,39 @@ fn build_overlay_route(
         return Err("Route start and destination are required".to_string());
     }
 
+    let graph = build_route_graph(conn)?;
     let all_names = load_route_location_names(conn)?;
 
-    let from_norm = match_route_location_name(&from_query, &all_names)
-        .ok_or_else(|| format!("Could not match route start: {from_query}"))?;
+    let to_is_safe = is_safe_route_query(&to_query);
+    let from_is_city = is_city_route_query(&from_query);
 
-    let to_norm = match_route_location_name(&to_query, &all_names)
-        .ok_or_else(|| format!("Could not match route destination: {to_query}"))?;
+    let matched_to_norm = if to_is_safe {
+        None
+    } else {
+        Some(
+            match_route_location_name(&to_query, &all_names)
+                .ok_or_else(|| format!("Could not match route destination: {to_query}"))?,
+        )
+    };
 
-    let graph = build_route_graph(conn)?;
+    let from_norm = if from_is_city {
+        let destination = matched_to_norm
+            .as_deref()
+            .ok_or_else(|| "Route start 'city' requires a concrete destination".to_string())?;
+        nearest_city_route_target(&graph, destination)
+            .ok_or_else(|| format!("Could not find nearest city to {to_query}"))?
+    } else {
+        match_route_location_name(&from_query, &all_names)
+            .ok_or_else(|| format!("Could not match route start: {from_query}"))?
+    };
+
+    let to_norm = if to_is_safe {
+        nearest_safe_route_target(&graph, &from_norm)
+            .ok_or_else(|| format!("Could not find nearest safe zone from {from_query}"))?
+    } else {
+        matched_to_norm.expect("matched_to_norm exists for non-safe route")
+    };
+
     let _ = debug_route_static_edges_for(conn, "martlock");
     let _ = debug_route_static_edges_for(conn, "thetford");
     let _ = debug_route_static_edges_for(conn, "portal");
@@ -4998,6 +5285,14 @@ fn load_route_location_names(conn: &Connection) -> Result<Vec<(String, String)>,
         for row in rows {
             result.push(row.map_err(db_err)?);
         }
+    }
+
+    for city in route_city_names() {
+        result.push((city.to_string(), title_case_location_name(city)));
+    }
+
+    for (_, portal) in city_portal_route_pairs() {
+        result.push((portal.to_string(), title_case_location_name(portal)));
     }
 
     // ВАЖНО: добавляем вершины, которые существуют только в route_static_edges
@@ -6249,6 +6544,7 @@ fn is_current_location_candidate_like(value: &str, known_locations: &[String]) -
             let normalized_name = normalize_location_name(name);
             normalized_name == normalized
                 || normalized_name.starts_with(&(normalized.clone() + " "))
+                || is_strong_levenshtein_location_match(&normalized, name)
         });
     }
 
@@ -6650,6 +6946,7 @@ fn match_current_location(cleaned_candidate: &str, primary: &[String]) -> Curren
         .collect::<Vec<_>>();
     let has_multi_word_candidate = alpha_words.len() >= 2;
     let exact_match = query == normalize_location_name(&best_candidate.name);
+    let levenshtein_match = is_strong_levenshtein_location_match(&query, &best_candidate.name);
     let avalon_compound_match = has_multi_word_candidate
         && best_candidate.name.contains('-')
         && alpha_words.len() == candidate_tokens.len()
@@ -6657,8 +6954,10 @@ fn match_current_location(cleaned_candidate: &str, primary: &[String]) -> Curren
         && token_prefix_similarity(&alpha_words, &candidate_tokens) >= 0.30
         && best_candidate.score >= 0.45;
     let strong_match = if alpha_words.len() == 1 && !exact_match {
-        false
+        levenshtein_match
     } else {
+        levenshtein_match
+            ||
         avalon_compound_match
             || best_candidate.score >= 0.88
             && (!has_multi_word_candidate
@@ -6675,6 +6974,8 @@ fn match_current_location(cleaned_candidate: &str, primary: &[String]) -> Curren
     };
     let match_reason = if exact_match {
         "exact cleaned candidate".to_string()
+    } else if strong_match && levenshtein_match {
+        "levenshtein dictionary match".to_string()
     } else if strong_match {
         "high-confidence dictionary match".to_string()
     } else if extracted_best.is_some() {
@@ -6835,6 +7136,40 @@ fn score_current_location_match(query: &str, candidate: &str) -> f64 {
     }
 
     (1.0 - distance / max_len).clamp(0.0, 1.0)
+}
+
+fn is_strong_levenshtein_location_match(query: &str, candidate_name: &str) -> bool {
+    let candidate = normalize_location_name(candidate_name);
+    if query.is_empty() || candidate.is_empty() {
+        return false;
+    }
+    if query == candidate {
+        return true;
+    }
+
+    let query_tokens = tokens(query)
+        .into_iter()
+        .filter(|token| token.chars().any(|ch| ch.is_alphabetic()))
+        .collect::<Vec<_>>();
+    let candidate_tokens = tokens(&candidate)
+        .into_iter()
+        .filter(|token| token.chars().any(|ch| ch.is_alphabetic()))
+        .collect::<Vec<_>>();
+    if query_tokens.is_empty() || query_tokens.len() != candidate_tokens.len() {
+        return false;
+    }
+
+    let distance = levenshtein(query, &candidate);
+    let max_len = query.chars().count().max(candidate.chars().count());
+    let allowed_distance = if max_len <= 6 {
+        1
+    } else if max_len <= 12 {
+        2
+    } else {
+        3
+    };
+
+    distance <= allowed_distance && score_current_location_match(query, &candidate) >= 0.78
 }
 
 fn same_token_initials_score(query_tokens: &[String], candidate_tokens: &[String]) -> f64 {
@@ -7281,6 +7616,17 @@ mod tests {
         assert_eq!(parsed.matched_location_name.as_deref(), Some("Eldon Hill"));
         assert_eq!(parsed.used_dictionary_match, false);
         assert_eq!(parsed.location_name.as_deref(), Some("Eldon"));
+    }
+
+    #[test]
+    fn parses_current_location_city_with_levenshtein_typo() {
+        let mut names = known();
+        names.push("Lymhurst".to_string());
+        let names = normalize_location_list(names);
+        let parsed = parse_current_location_ocr("61\nLymhyrst\n05:04", &[], &names);
+        assert_eq!(parsed.location_name.as_deref(), Some("Lymhurst"));
+        assert_eq!(parsed.used_dictionary_match, true);
+        assert_eq!(parsed.match_reason, "levenshtein dictionary match");
     }
 
     #[test]

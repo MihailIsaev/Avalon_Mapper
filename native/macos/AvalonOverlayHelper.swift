@@ -1196,7 +1196,7 @@ private func chestColor(_ color: String) -> NSColor {
         )
         NSColor.systemRed.withAlphaComponent(0.35).setFill()
         NSBezierPath(roundedRect: delRoutesButtonRect(), xRadius: 5, yRadius: 5).fill()
-        "DelRoutes".draw(
+        "DelRout".draw(
             at: NSPoint(x: delRoutesButtonRect().minX + 8, y: delRoutesButtonRect().minY + 5),
             withAttributes: tinyAttrs
         )
@@ -1502,8 +1502,8 @@ private func chestColor(_ color: String) -> NSColor {
         if interactive {
             (deleteEdgeMode ? NSColor.systemRed.withAlphaComponent(0.42) : NSColor.systemTeal.withAlphaComponent(0.35)).setFill()
             NSBezierPath(roundedRect: modeButtonRect(), xRadius: 5, yRadius: 5).fill()
-            (deleteEdgeMode ? "Deleting" : "Delete edges").draw(
-                at: NSPoint(x: modeButtonRect().minX + 8, y: modeButtonRect().minY + 5),
+            "Del".draw(
+                at: NSPoint(x: modeButtonRect().minX + 14, y: modeButtonRect().minY + 5),
                 withAttributes: tinyAttrs
             )
         }
@@ -1800,15 +1800,15 @@ private func chestColor(_ color: String) -> NSColor {
     }
 
     private func shortcutMinusRect() -> NSRect {
-        NSRect(x: bounds.width - 292, y: bounds.height - 36, width: 26, height: 24)
+        NSRect(x: bounds.width - 216, y: bounds.height - 36, width: 26, height: 24)
     }
 
     private func shortcutValueRect() -> NSRect {
-        NSRect(x: bounds.width - 262, y: bounds.height - 36, width: 34, height: 24)
+        NSRect(x: bounds.width - 186, y: bounds.height - 36, width: 34, height: 24)
     }
 
     private func shortcutPlusRect() -> NSRect {
-        NSRect(x: bounds.width - 224, y: bounds.height - 36, width: 26, height: 24)
+        NSRect(x: bounds.width - 148, y: bounds.height - 36, width: 26, height: 24)
     }
 
     private func drawShortcutDepthControl() {
@@ -1843,7 +1843,7 @@ private func chestColor(_ color: String) -> NSColor {
     }
 
     private func modeButtonRect() -> NSRect {
-        NSRect(x: bounds.width - 168, y: bounds.height - 37, width: 100, height: 24)
+        NSRect(x: bounds.width - 116, y: bounds.height - 37, width: 48, height: 24)
     }
     private func routeFromRect() -> NSRect {
         NSRect(x: 14, y: 30, width: 105, height: 24)
@@ -1858,7 +1858,7 @@ private func chestColor(_ color: String) -> NSColor {
     }
 
     private func delRoutesButtonRect() -> NSRect {
-        NSRect(x: 288, y: 30, width: 72, height: 24)
+        NSRect(x: 288, y: 30, width: 48, height: 24)
     }
     private func resizeHandleRect() -> NSRect {
         NSRect(x: bounds.width - 24, y: 0, width: 24, height: 24)
@@ -1927,6 +1927,7 @@ func runCaptureOcrMode(args: [String]) {
     let portalAnchorX = argValue(args, "--portal-anchor-x").flatMap(Double.init)
     let portalAnchorY = argValue(args, "--portal-anchor-y").flatMap(Double.init)
     let rect: CGRect
+    let rectStarted = Date()
     if let portalX, let portalY, let portalWidth, let portalHeight, let portalAnchorX, let portalAnchorY {
         let mouse = NSEvent.mouseLocation
         let cursor = topLeftCursorPoint(mouse)
@@ -1951,19 +1952,30 @@ func runCaptureOcrMode(args: [String]) {
         let y = CGFloat(Int(argValue(args, "--y") ?? "0") ?? 0)
         rect = CGRect(x: x, y: y, width: width, height: height)
     }
+    fputs("[capture-helper-timing] kind=\(kind) phase=rect ms=\(Int(Date().timeIntervalSince(rectStarted) * 1000)) rect=\(rect)\n", stderr)
+    fflush(stderr)
 
     if overlayResizeDebug {
         fputs("[capture-helper] kind=\(kind) rect=\(rect) portalAnchor=(\(String(describing: portalAnchorX)),\(String(describing: portalAnchorY)))\n", stderr)
         fflush(stderr)
     }
 
+    let permissionStarted = Date()
     let permission = CGPreflightScreenCaptureAccess()
+    fputs("[capture-helper-timing] kind=\(kind) phase=permission ms=\(Int(Date().timeIntervalSince(permissionStarted) * 1000)) allowed=\(permission)\n", stderr)
+    fflush(stderr)
+    let captureStarted = Date()
     guard let image = CGWindowListCreateImage(rect, .optionOnScreenOnly, kCGNullWindowID, [.bestResolution, .nominalResolution]) else {
         fputs("Could not capture screen region. Grant Screen Recording permission and use Windowed/Borderless mode.\n", stderr)
         exit(2)
     }
+    fputs("[capture-helper-timing] kind=\(kind) phase=screen_capture ms=\(Int(Date().timeIntervalSince(captureStarted) * 1000)) size=\(image.width)x\(image.height)\n", stderr)
+    fflush(stderr)
 
+    let saveStarted = Date()
     let imagePath = saveCaptureImage(image: image, outputDir: outputDir, kind: kind)
+    fputs("[capture-helper-timing] kind=\(kind) phase=save_png ms=\(Int(Date().timeIntervalSince(saveStarted) * 1000)) total_ms=\(Int(Date().timeIntervalSince(started) * 1000)) path=\(imagePath)\n", stderr)
+    fflush(stderr)
     let output = CaptureOcrOutput(
         text: "",
         confidence: nil,
