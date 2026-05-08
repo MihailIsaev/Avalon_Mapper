@@ -107,6 +107,7 @@ class EdgeStore:
         expires_at = payload.get("expires_at")
         observations_count = int(payload.get("observations_count") or 1)
         source = str(payload.get("source") or "client")[:64]
+        revive = bool(payload.get("revive")) or source == "local_readd"
 
         with self.lock, self.connect() as conn:
             existing = conn.execute(
@@ -120,6 +121,8 @@ class EdgeStore:
                 (from_normalized, to_normalized),
             ).fetchone()
             if existing:
+                if existing["status"] == "deleted" and not revive:
+                    return dict(existing)
                 if existing["status"] == "deleted" and not iso_is_newer(last_seen_at, existing["last_seen_at"]):
                     return dict(existing)
 

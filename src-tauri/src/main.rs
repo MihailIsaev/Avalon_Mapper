@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -536,6 +536,7 @@ struct SyncEdgePayload {
     observations_count: Option<i64>,
     source: Option<String>,
     status: Option<String>,
+    revive: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -6010,6 +6011,10 @@ fn upsert_edge(
                 expires_at = COALESCE(?3, expires_at),
                 observations_count = observations_count + 1,
                 confidence = 1.0,
+                source = CASE
+                    WHEN status = 'deleted' THEN 'local_readd'
+                    ELSE source
+                END,
                 status = 'active'
             WHERE id = ?4
             "#,
@@ -6135,21 +6140,7 @@ fn run_sync_once(
         return Ok(());
     }
 
-    let snapshot_url = sync_url(&settings.server_url, "snapshot")?;
-    let snapshot_body = http_json_request("GET", &snapshot_url, None, None)?;
-    let snapshot: SyncSnapshot = serde_json::from_str(&snapshot_body)
-        .map_err(|err| format!("Could not parse sync snapshot: {err}; body={snapshot_body}"))?;
-    if !snapshot.ok {
-        return Err(snapshot.error.unwrap_or_else(|| "Sync snapshot failed".to_string()));
-    }
-
     let mut changed = 0usize;
-    for edge in snapshot.edges {
-        if apply_sync_edge(&mut conn, &edge)? {
-            changed += 1;
-        }
-    }
-
     let edges = load_edges(&conn)?;
     let post_url = sync_url(&settings.server_url, "edges")?;
     for edge in edges {
@@ -6158,6 +6149,7 @@ fn run_sync_once(
         }
         let from_normalized = normalize_location_name(&edge.from_location_name);
         let to_normalized = normalize_location_name(&edge.to_location_name);
+        let revive = edge.source == "local_readd";
         let payload = SyncEdgePayload {
             from_name: edge.from_location_name,
             to_name: edge.to_location_name,
@@ -6170,6 +6162,7 @@ fn run_sync_once(
             observations_count: Some(edge.observations_count),
             source: Some(edge.source),
             status: Some(edge.status),
+            revive: Some(revive),
         };
         let body = serde_json::to_string(&payload).map_err(|err| err.to_string())?;
         let response_body = http_json_request("POST", &post_url, Some(&body), Some(&settings.write_token))?;
@@ -6177,6 +6170,20 @@ fn run_sync_once(
             .map_err(|err| format!("Could not parse sync POST response: {err}; body={response_body}"))?;
         if !response.ok {
             return Err(response.error.unwrap_or_else(|| "Sync POST failed".to_string()));
+        }
+    }
+
+    let snapshot_url = sync_url(&settings.server_url, "snapshot")?;
+    let snapshot_body = http_json_request("GET", &snapshot_url, None, None)?;
+    let snapshot: SyncSnapshot = serde_json::from_str(&snapshot_body)
+        .map_err(|err| format!("Could not parse sync snapshot: {err}; body={snapshot_body}"))?;
+    if !snapshot.ok {
+        return Err(snapshot.error.unwrap_or_else(|| "Sync snapshot failed".to_string()));
+    }
+
+    for edge in snapshot.edges {
+        if apply_sync_edge(&mut conn, &edge)? {
+            changed += 1;
         }
     }
 
@@ -6198,13 +6205,6 @@ fn apply_sync_edge(conn: &mut Connection, edge: &SyncEdgePayload) -> Result<bool
     }
 
     if edge.status.as_deref() == Some("deleted") {
-        if remote_delete_is_stale(conn, from_name, to_name, edge.last_seen_at.as_deref())? {
-            eprintln!(
-                "[sync] ignored stale remote delete for {from_name} -> {to_name} remote_last_seen={:?}",
-                edge.last_seen_at
-            );
-            return Ok(false);
-        }
         return delete_edge_by_locations(conn, from_name, to_name);
     }
 
@@ -6244,60 +6244,6 @@ fn apply_sync_edge(conn: &mut Connection, edge: &SyncEdgePayload) -> Result<bool
     )?;
     tx.commit().map_err(db_err)?;
     Ok(changed)
-}
-
-fn remote_delete_is_stale(
-    conn: &Connection,
-    from_name: &str,
-    to_name: &str,
-    remote_last_seen_at: Option<&str>,
-) -> Result<bool, String> {
-    let Some(remote_last_seen_at) = remote_last_seen_at else {
-        return Ok(false);
-    };
-    let from_normalized = normalize_location_name(from_name);
-    let to_normalized = normalize_location_name(to_name);
-    if from_normalized.is_empty() || to_normalized.is_empty() {
-        return Ok(false);
-    }
-    let (from_normalized, to_normalized) =
-        canonicalize_normalized_edge_pair(&from_normalized, &to_normalized);
-
-    let local = conn
-        .query_row(
-            r#"
-            SELECT e.status, e.last_seen_at
-            FROM edges e
-            JOIN locations lf ON lf.id = e.from_location_id
-            JOIN locations lt ON lt.id = e.to_location_id
-            WHERE (
-                lf.normalized_name = ?1 AND lt.normalized_name = ?2
-            )
-            OR (
-                lf.normalized_name = ?2 AND lt.normalized_name = ?1
-            )
-            LIMIT 1
-            "#,
-            params![from_normalized, to_normalized],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-        )
-        .optional()
-        .map_err(db_err)?;
-
-    let Some((local_status, local_last_seen_at)) = local else {
-        return Ok(false);
-    };
-    Ok(local_status != "deleted" && timestamp_is_newer(&local_last_seen_at, remote_last_seen_at))
-}
-
-fn timestamp_is_newer(left: &str, right: &str) -> bool {
-    match (
-        DateTime::parse_from_rfc3339(left),
-        DateTime::parse_from_rfc3339(right),
-    ) {
-        (Ok(left), Ok(right)) => left > right,
-        _ => left > right,
-    }
 }
 
 fn upsert_synced_edge(
@@ -8118,19 +8064,15 @@ mod tests {
     }
 
     #[test]
-    fn stale_remote_delete_does_not_remove_readded_local_edge() {
+    fn remote_delete_removes_active_local_edge_everywhere() {
         let mut conn = Connection::open_in_memory().unwrap();
         initialize_schema(&conn).unwrap();
 
         let from_id = upsert_location(&conn, "Test From", "test from", "avalon", false).unwrap();
         let to_id = upsert_location(&conn, "Test To", "test to", "avalon", false).unwrap();
-        let edge_id = upsert_edge(&conn, from_id, to_id, None).unwrap();
-        assert!(delete_edge_by_locations(&mut conn, "Test From", "Test To").unwrap());
+        upsert_edge(&conn, from_id, to_id, None).unwrap();
 
-        let readded_id = upsert_edge(&conn, to_id, from_id, None).unwrap();
-        assert_eq!(readded_id, edge_id);
-
-        let stale_delete = SyncEdgePayload {
+        let remote_delete = SyncEdgePayload {
             from_name: "Test From".to_string(),
             to_name: "Test To".to_string(),
             from_normalized: Some("test from".to_string()),
@@ -8142,12 +8084,16 @@ mod tests {
             observations_count: None,
             source: Some("deleted".to_string()),
             status: Some("deleted".to_string()),
+            revive: None,
         };
 
-        assert!(!apply_sync_edge(&mut conn, &stale_delete).unwrap());
-        let edges = load_edges(&conn).unwrap();
-        assert_eq!(edges.len(), 1);
-        assert_eq!(edges[0].status, "active");
+        assert!(apply_sync_edge(&mut conn, &remote_delete).unwrap());
+        assert!(load_edges(&conn).unwrap().is_empty());
+
+        let readded_id = upsert_edge(&conn, to_id, from_id, None).unwrap();
+        let edge = load_edge_by_id(&conn, readded_id).unwrap();
+        assert_eq!(edge.status, "active");
+        assert_eq!(edge.source, "local_readd");
     }
 
     #[test]
