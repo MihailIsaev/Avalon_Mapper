@@ -35,6 +35,7 @@ internal static class Program
                     return 0;
                 case "region":
                 case "portal-size":
+                case "portal-strips":
                 case "diagnostic":
                     Application.Run(new SelectionForm(mode));
                     return 0;

@@ -2591,7 +2591,7 @@ fn run_native_overlay(app: &AppHandle, mode: &str) -> Result<OverlaySelection, S
         return Err("Native overlay helper is implemented for macOS and Windows".to_string());
     }
     if mode != "region" && mode != "portal-size" && mode != "portal-strips" && mode != "diagnostic" {
-        return Err("Unknown overlay mode".to_string());
+        return Err(format!("Unknown overlay mode: {mode}"));
     }
 
     let helper = ensure_native_overlay_helper(app)?;
