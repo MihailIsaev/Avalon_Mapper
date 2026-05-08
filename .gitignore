@@ -11,3 +11,5 @@ src-tauri/resources/
 native/ocr/__pycache__/
 tools/data/
 test_crops/
+native/windows/AvalonOverlayHelper/bin/
+native/windows/AvalonOverlayHelper/obj/
