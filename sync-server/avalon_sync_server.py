@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS edges (
     expires_at TEXT,
     observations_count INTEGER NOT NULL DEFAULT 1,
     source TEXT NOT NULL DEFAULT 'client',
+    status TEXT NOT NULL DEFAULT 'active',
     UNIQUE(from_normalized, to_normalized)
 );
 
@@ -39,6 +40,10 @@ def normalize_name(value: str) -> str:
     return " ".join(value.strip().lower().split())
 
 
+def canonicalize_edge_pair(from_normalized: str, to_normalized: str) -> tuple[str, str]:
+    return tuple(sorted((from_normalized, to_normalized)))  # type: ignore[return-value]
+
+
 class EdgeStore:
     def __init__(self, db_path: Path):
         self.db_path = db_path
@@ -46,6 +51,13 @@ class EdgeStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as conn:
             conn.executescript(SCHEMA)
+            columns = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(edges)").fetchall()
+            }
+            if "status" not in columns:
+                conn.execute("ALTER TABLE edges ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+            conn.commit()
 
     def connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
@@ -58,7 +70,7 @@ class EdgeStore:
                 """
                 SELECT from_name, to_name, from_normalized, to_normalized,
                        first_seen_at, last_seen_at, ttl_seconds, expires_at,
-                       observations_count, source
+                       observations_count, source, status
                 FROM edges
                 WHERE expires_at IS NULL OR datetime(expires_at) > datetime('now')
                 ORDER BY last_seen_at DESC
@@ -74,8 +86,8 @@ class EdgeStore:
 
         from_normalized = normalize_name(payload.get("from_normalized") or from_name)
         to_normalized = normalize_name(payload.get("to_normalized") or to_name)
-        if from_normalized > to_normalized:
-            from_normalized, to_normalized = to_normalized, from_normalized
+        from_normalized, to_normalized = canonicalize_edge_pair(from_normalized, to_normalized)
+        if from_normalized != normalize_name(payload.get("from_normalized") or from_name):
             from_name, to_name = to_name, from_name
 
         first_seen_at = payload.get("first_seen_at") or now_iso()
@@ -106,7 +118,8 @@ class EdgeStore:
                         ttl_seconds = COALESCE(?4, ttl_seconds),
                         expires_at = COALESCE(?5, expires_at),
                         observations_count = MAX(observations_count, ?6),
-                        source = ?7
+                        source = ?7,
+                        status = 'active'
                     WHERE id = ?8
                     """,
                     (
@@ -126,9 +139,9 @@ class EdgeStore:
                     INSERT INTO edges (
                         from_normalized, to_normalized, from_name, to_name,
                         first_seen_at, last_seen_at, ttl_seconds, expires_at,
-                        observations_count, source
+                        observations_count, source, status
                     )
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'active')
                     """,
                     (
                         from_normalized,
@@ -156,7 +169,52 @@ class EdgeStore:
             "expires_at": expires_at,
             "observations_count": observations_count,
             "source": source,
+            "status": "active",
         }
+
+    def delete_edge(self, payload: dict) -> dict:
+        from_name = str(payload.get("from_name") or payload.get("from_location_name") or "").strip()
+        to_name = str(payload.get("to_name") or payload.get("to_location_name") or "").strip()
+        if not from_name or not to_name:
+            raise ValueError("from_name and to_name are required")
+
+        from_normalized, to_normalized = canonicalize_edge_pair(
+            normalize_name(payload.get("from_normalized") or from_name),
+            normalize_name(payload.get("to_normalized") or to_name),
+        )
+
+        now = now_iso()
+        with self.lock, self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id, from_name, to_name, from_normalized, to_normalized,
+                       first_seen_at, last_seen_at, ttl_seconds, expires_at,
+                       observations_count, source, status
+                FROM edges
+                WHERE from_normalized = ?1 AND to_normalized = ?2
+                """,
+                (from_normalized, to_normalized),
+            ).fetchone()
+            if row is None:
+                raise ValueError("edge not found")
+
+            conn.execute(
+                """
+                UPDATE edges
+                SET last_seen_at = ?1,
+                    source = 'deleted',
+                    status = 'deleted'
+                WHERE id = ?2
+                """,
+                (now, row["id"]),
+            )
+            conn.commit()
+
+            updated = dict(row)
+            updated["last_seen_at"] = now
+            updated["source"] = "deleted"
+            updated["status"] = "deleted"
+            return updated
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -198,9 +256,26 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             self.write_json({"ok": False, "error": str(exc)}, status=400)
 
+    def do_DELETE(self):
+        path = urlparse(self.path).path.rstrip("/")
+        if not path.endswith("/edges"):
+            self.write_json({"ok": False, "error": "not found"}, status=404)
+            return
+        if self.write_token and self.headers.get("X-Avalon-Token") != self.write_token:
+            self.write_json({"ok": False, "error": "unauthorized"}, status=401)
+            return
+
+        length = int(self.headers.get("Content-Length") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            edge = self.store.delete_edge(payload)
+            self.write_json({"ok": True, "edge": edge})
+        except Exception as exc:
+            self.write_json({"ok": False, "error": str(exc)}, status=400)
+
     def send_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Avalon-Token")
 
     def write_json(self, payload: dict, status: int = 200):

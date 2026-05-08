@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "dgSpecHash": "RDba3aBVSdE=",
+  "success": false,
+  "projectFilePath": "/Users/mikhail_isaev/Documents/AvalonMapper/AvalonMapper/native/windows/AvalonOverlayHelper/AvalonOverlayHelper.csproj",
+  "expectedPackageFiles": [],
+  "logs": [
+    {
+      "code": "NU1301",
+      "level": "Error",
+      "message": "Не удалось загрузить индекс служб для источника https://api.nuget.org/v3/index.json.\n  nodename nor servname provided, or not known (api.nuget.org:443)\n  nodename nor servname provided, or not known",
+      "projectPath": "/Users/mikhail_isaev/Documents/AvalonMapper/AvalonMapper/native/windows/AvalonOverlayHelper/AvalonOverlayHelper.csproj",
+      "filePath": "/Users/mikhail_isaev/Documents/AvalonMapper/AvalonMapper/native/windows/AvalonOverlayHelper/AvalonOverlayHelper.csproj",
+      "targetGraphs": []
+    },
+    {
+      "code": "NU1900",
+      "level": "Warning",
+      "message": "Произошла ошибка при получении данных уязвимости пакета: Не удалось загрузить индекс служб для источника https://api.nuget.org/v3/index.json.",
+      "projectPath": "/Users/mikhail_isaev/Documents/AvalonMapper/AvalonMapper/native/windows/AvalonOverlayHelper/AvalonOverlayHelper.csproj",
+      "warningLevel": 1,
+      "filePath": "/Users/mikhail_isaev/Documents/AvalonMapper/AvalonMapper/native/windows/AvalonOverlayHelper/AvalonOverlayHelper.csproj",
+      "targetGraphs": []
+    }
+  ]
+}

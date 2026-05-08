@@ -486,6 +486,11 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
         fflush(stdout)
     }
 
+    func deleteEdge(id: Int) {
+        print("{\"event\":\"delete_edge\",\"edge_id\":\(id)}")
+        fflush(stdout)
+    }
+
     private func createPanel() {
         let initialBounds = loadBoundsFromDisk() ?? MapOverlayBounds(x: 80, y: 120, width: 360, height: 300)
         let frame = frameFromTopLeftBounds(initialBounds)
@@ -509,7 +514,7 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
         view.onMove = { [weak self] point in self?.movePanel(to: point) }
         view.onResizeStart = { [weak self] point in self?.beginResize(at: point) }
         view.onResize = { [weak self] point in self?.resizePanel(to: point) }
-        view.onToggleInteractive = { [weak self] in self?.setInteractive(false) }
+        view.onDeleteEdge = { [weak self] edgeId in self?.deleteEdge(id: edgeId) }
         view.onUndoLastAction = { [weak self] in
             self?.undoLastAction()
         }
@@ -642,6 +647,9 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
         interactive = enabled
         panel?.ignoresMouseEvents = !enabled
         overlayView?.interactive = enabled
+        if !enabled {
+            overlayView?.deleteEdgeMode = false
+        }
         overlayView?.needsDisplay = true
 
         if enabled {
@@ -763,6 +771,31 @@ struct BoundsEvent: Encodable {
 }
 
 final class MapOverlayView: NSView {
+    private struct EdgeHitTarget {
+        let id: Int
+        let from: NSPoint
+        let to: NSPoint
+
+        func contains(_ point: NSPoint, threshold: CGFloat) -> Bool {
+            let dx = to.x - from.x
+            let dy = to.y - from.y
+            let lengthSquared = dx * dx + dy * dy
+            if lengthSquared <= 0.0001 {
+                let px = point.x - from.x
+                let py = point.y - from.y
+                return sqrt(px * px + py * py) <= threshold
+            }
+
+            let t = ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared
+            let clampedT = max(0, min(1, t))
+            let closestX = from.x + clampedT * dx
+            let closestY = from.y + clampedT * dy
+            let px = point.x - closestX
+            let py = point.y - closestY
+            return sqrt(px * px + py * py) <= threshold
+        }
+    }
+
     var onShortcutDepthChanged: ((Int) -> Void)?
     private var shortcutDepth = 3
     var data: MapOverlayData = MapOverlayData(
@@ -962,13 +995,13 @@ private func chestColor(_ color: String) -> NSColor {
             )
         }
     }
-    private func drawAvalonTierBorder(location: MapLocation, nodeRect: NSRect) {
+    private func drawAvalonTierBorder(location: MapLocation, nodeRect: NSRect, isCurrent: Bool) {
         guard location.zone_type == "avalon" else { return }
 
         let tiers = location.avalon_tiers ?? []
 
         if tiers.contains(8) {
-            drawT8AvalonBorder(nodeRect: nodeRect)
+            drawT8AvalonBorder(nodeRect: nodeRect, isCurrent: isCurrent)
             return
         }
 
@@ -980,12 +1013,12 @@ private func chestColor(_ color: String) -> NSColor {
         tierBorder.stroke()
     }
 
-    private func drawT8AvalonBorder(nodeRect: NSRect) {
+    private func drawT8AvalonBorder(nodeRect: NSRect, isCurrent: Bool) {
         let outerRect = nodeRect.insetBy(dx: -4.0, dy: -4.0)
         let innerRect = nodeRect.insetBy(dx: -1.5, dy: -1.5)
 
         drawStripedSilverRing(outerRect: outerRect, innerRect: innerRect)
-        colorForZoneType("avalon", isCurrent: false).setFill()
+        colorForZoneType("avalon", isCurrent: isCurrent).setFill()
         NSBezierPath(ovalIn: nodeRect).fill()
         drawJaggedRing(around: outerRect)
     }
@@ -1074,6 +1107,7 @@ private func chestColor(_ color: String) -> NSColor {
     private var avalonInfoPoint: NSPoint?
     var onFindRoute: ((String, String) -> Void)?
     var onClearRoute: (() -> Void)?
+    var onDeleteEdge: ((Int) -> Void)?
 
     private var routeFromText = ""
     private var routeToText = ""
@@ -1085,11 +1119,11 @@ private func chestColor(_ color: String) -> NSColor {
     }
     override var acceptsFirstResponder: Bool { true }
     var interactive = false
+    var deleteEdgeMode = false
     var onMoveStart: ((NSPoint) -> Void)?
     var onMove: ((NSPoint) -> Void)?
     var onResizeStart: ((NSPoint) -> Void)?
     var onResize: ((NSPoint) -> Void)?
-    var onToggleInteractive: (() -> Void)?
     var onUndoLastAction: (() -> Void)?
 
     private var isDraggingHeader = false
@@ -1099,6 +1133,7 @@ private func chestColor(_ color: String) -> NSColor {
     private var panStartOffset = NSPoint(x: 0, y: 0)
     private var selectedLocationId: Int?
     private var lastNodeRects: [(id: Int, rect: NSRect)] = []
+    private var lastEdgeHitTargets: [EdgeHitTarget] = []
     private var mapPan = NSPoint(x: 0, y: 0)
     private var mapZoom: CGFloat = 1.0
 
@@ -1352,6 +1387,18 @@ private func chestColor(_ color: String) -> NSColor {
             needsDisplay = true
             return
         }
+        if modeButtonRect().contains(point) {
+            deleteEdgeMode.toggle()
+            needsDisplay = true
+            return
+        }
+        if deleteEdgeMode {
+            if let hit = lastEdgeHitTargets.reversed().first(where: { $0.contains(point, threshold: 8.5) }) {
+                onDeleteEdge?(hit.id)
+                needsDisplay = true
+            }
+            return
+        }
         if graphRect(in: bounds).contains(point) {
             if let hit = lastNodeRects.reversed().first(where: { $0.rect.contains(point) }) {
                 selectedLocationId = hit.id
@@ -1372,11 +1419,6 @@ private func chestColor(_ color: String) -> NSColor {
 
         if undoButtonRect().contains(point) {
             onUndoLastAction?()
-            return
-        }
-
-        if modeButtonRect().contains(point) {
-            onToggleInteractive?()
             return
         }
 
@@ -1458,9 +1500,9 @@ private func chestColor(_ color: String) -> NSColor {
         )
 
         if interactive {
-            NSColor.systemTeal.withAlphaComponent(0.35).setFill()
+            (deleteEdgeMode ? NSColor.systemRed.withAlphaComponent(0.42) : NSColor.systemTeal.withAlphaComponent(0.35)).setFill()
             NSBezierPath(roundedRect: modeButtonRect(), xRadius: 5, yRadius: 5).fill()
-            "Pass clicks".draw(
+            (deleteEdgeMode ? "Deleting" : "Delete edges").draw(
                 at: NSPoint(x: modeButtonRect().minX + 8, y: modeButtonRect().minY + 5),
                 withAttributes: tinyAttrs
             )
@@ -1524,6 +1566,7 @@ private func chestColor(_ color: String) -> NSColor {
         NSColor(calibratedWhite: 1.0, alpha: 0.06).setFill()
         NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
         lastNodeRects.removeAll()
+        lastEdgeHitTargets.removeAll()
         let locations = data.locations.sorted { $0.id < $1.id }
         if locations.isEmpty {
             "No graph data".draw(at: NSPoint(x: rect.midX - 44, y: rect.midY - 7), withAttributes: smallAttrs)
@@ -1607,6 +1650,8 @@ private func chestColor(_ color: String) -> NSColor {
                 continue
             }
 
+            lastEdgeHitTargets.append(EdgeHitTarget(id: edge.id, from: from, to: to))
+
             let path = NSBezierPath()
             path.move(to: from)
             path.line(to: to)
@@ -1671,7 +1716,7 @@ private func chestColor(_ color: String) -> NSColor {
             let border = NSBezierPath(ovalIn: nodeRect.insetBy(dx: -1.5, dy: -1.5))
             border.lineWidth = isSelected ? 3.0 : (isCurrent ? 2.0 : 1.0)
             border.stroke()
-            drawAvalonTierBorder(location: location, nodeRect: nodeRect)
+            drawAvalonTierBorder(location: location, nodeRect: nodeRect, isCurrent: isCurrent)
         }
         for location in data.bridge_locations {
             guard let point = positions[location.id] else { continue }
@@ -1755,15 +1800,15 @@ private func chestColor(_ color: String) -> NSColor {
     }
 
     private func shortcutMinusRect() -> NSRect {
-        NSRect(x: bounds.width - 246, y: bounds.height - 36, width: 26, height: 24)
+        NSRect(x: bounds.width - 292, y: bounds.height - 36, width: 26, height: 24)
     }
 
     private func shortcutValueRect() -> NSRect {
-        NSRect(x: bounds.width - 216, y: bounds.height - 36, width: 34, height: 24)
+        NSRect(x: bounds.width - 262, y: bounds.height - 36, width: 34, height: 24)
     }
 
     private func shortcutPlusRect() -> NSRect {
-        NSRect(x: bounds.width - 178, y: bounds.height - 36, width: 26, height: 24)
+        NSRect(x: bounds.width - 224, y: bounds.height - 36, width: 26, height: 24)
     }
 
     private func drawShortcutDepthControl() {
@@ -1798,7 +1843,7 @@ private func chestColor(_ color: String) -> NSColor {
     }
 
     private func modeButtonRect() -> NSRect {
-        NSRect(x: bounds.width - 156, y: bounds.height - 37, width: 88, height: 24)
+        NSRect(x: bounds.width - 168, y: bounds.height - 37, width: 100, height: 24)
     }
     private func routeFromRect() -> NSRect {
         NSRect(x: 14, y: 30, width: 105, height: 24)

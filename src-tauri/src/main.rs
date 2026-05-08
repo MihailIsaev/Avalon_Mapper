@@ -538,6 +538,7 @@ struct SyncEdgePayload {
     expires_at: Option<String>,
     observations_count: Option<i64>,
     source: Option<String>,
+    status: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1887,7 +1888,7 @@ fn build_route_graph(conn: &Connection) -> Result<std::collections::HashMap<Stri
                 FROM edges e
                 JOIN locations lf ON lf.id = e.from_location_id
                 JOIN locations lt ON lt.id = e.to_location_id
-                WHERE e.status != 'expired'
+                WHERE e.status NOT IN ('expired', 'deleted')
                   AND (
                     e.expires_at IS NULL
                     OR datetime(e.expires_at) > datetime('now')
@@ -2430,6 +2431,15 @@ fn ensure_map_overlay_running(app: &AppHandle, state: &AppState) -> Result<(), S
 
     let _ = send_hotkeys_to_overlay(app, state);
 
+    match build_map_overlay_data(state) {
+        Ok(data) => {
+            send_map_overlay_command(app, state, json!({ "type": "data", "data": data }))?;
+        }
+        Err(err) => {
+            eprintln!("[overlay-helper] could not build initial map data: {err}");
+        }
+    }
+
     Ok(())
 }
 
@@ -2472,7 +2482,7 @@ fn spawn_map_overlay_stdout_reader(
             let Some(event) = value.get("event").and_then(|event| event.as_str()) else {
                 continue;
             };
-            if let Ok(conn) = Connection::open(&db_path) {
+            if let Ok(mut conn) = Connection::open(&db_path) {
                 match event {
                     "set_shortcut_depth" => {
                         let value = value
@@ -2588,6 +2598,66 @@ fn spawn_map_overlay_stdout_reader(
                             if let Ok(data) = build_map_overlay_data_from_conn(&conn) {
                                 let _ = send_map_overlay_command_direct(&overlay, json!({ "type": "data", "data": data }));
                             }
+                        }
+                    }
+                    "delete_edge" => {
+                        let Some(edge_id) = value.get("edge_id").and_then(|edge_id| edge_id.as_i64()) else {
+                            continue;
+                        };
+
+                        let Ok(edge) = load_edge_by_id(&conn, edge_id) else {
+                            eprintln!("[delete-edge] edge id {edge_id} not found");
+                            continue;
+                        };
+
+                        if let Err(err) = delete_edge_by_id(&mut conn, edge_id) {
+                            eprintln!("[delete-edge] local delete failed: {err}");
+                            continue;
+                        }
+
+                        if let Ok(sync_settings) = read_sync_settings(&conn) {
+                            if sync_settings.enabled && !sync_settings.server_url.trim().is_empty() {
+                                let delete_url = match sync_url(&sync_settings.server_url, "edges") {
+                                    Ok(url) => url,
+                                    Err(err) => {
+                                        eprintln!("[delete-edge] invalid sync url: {err}");
+                                        String::new()
+                                    }
+                                };
+
+                                if !delete_url.is_empty() {
+                                    let from_normalized = normalize_location_name(&edge.from_location_name);
+                                    let to_normalized = normalize_location_name(&edge.to_location_name);
+                                    let (from_normalized, to_normalized) =
+                                        canonicalize_normalized_edge_pair(&from_normalized, &to_normalized);
+                                    let payload = json!({
+                                        "from_name": edge.from_location_name,
+                                        "to_name": edge.to_location_name,
+                                        "from_normalized": from_normalized,
+                                        "to_normalized": to_normalized,
+                                        "source": "deleted",
+                                    });
+                                    let body = payload.to_string();
+                                    if let Err(err) = http_json_request(
+                                        "DELETE",
+                                        &delete_url,
+                                        Some(&body),
+                                        Some(&sync_settings.write_token),
+                                    ) {
+                                        eprintln!("[delete-edge] sync delete failed: {err}");
+                                    }
+                                }
+                            }
+                        }
+
+                        if let Err(err) = recompute_graph_layout(&conn) {
+                            eprintln!("[delete-edge] layout recompute failed: {err}");
+                        }
+                        if let Ok(data) = build_map_overlay_data_from_conn(&conn) {
+                            let _ = send_map_overlay_command_direct(
+                                &overlay,
+                                json!({ "type": "data", "data": data }),
+                            );
                         }
                     }
                     "visible" => {
@@ -2712,12 +2782,11 @@ fn route_min_expires_at(
                 FROM edges e
                 JOIN locations lf ON lf.id = e.from_location_id
                 JOIN locations lt ON lt.id = e.to_location_id
-                WHERE (
-                    lf.normalized_name = ?1 AND lt.normalized_name = ?2
-                )
-                OR (
-                    lf.normalized_name = ?2 AND lt.normalized_name = ?1
-                )
+                WHERE e.status NOT IN ('expired', 'deleted')
+                  AND (
+                    (lf.normalized_name = ?1 AND lt.normalized_name = ?2)
+                    OR (lf.normalized_name = ?2 AND lt.normalized_name = ?1)
+                  )
                 LIMIT 1
                 "#,
                 params![a.normalized_name, b.normalized_name],
@@ -4110,6 +4179,26 @@ fn load_locations(conn: &Connection) -> Result<Vec<Location>, String> {
                    p.x, p.y
             FROM locations l
             LEFT JOIN node_positions p ON p.location_id = l.id
+            WHERE EXISTS (
+                SELECT 1
+                FROM edges e
+                WHERE e.status NOT IN ('expired', 'deleted')
+                  AND (
+                    e.expires_at IS NULL
+                    OR datetime(e.expires_at) > datetime('now')
+                  )
+                  AND (
+                    e.from_location_id = l.id
+                    OR e.to_location_id = l.id
+                  )
+            )
+            OR l.id = CAST(COALESCE(
+                (SELECT value FROM app_settings WHERE key = 'current_location_id'),
+                '-1'
+            ) AS INTEGER)
+            OR l.name = (
+                SELECT value FROM app_settings WHERE key = 'current_location_name'
+            )
             ORDER BY l.name
             "#,
         )
@@ -4151,6 +4240,11 @@ fn load_edges(conn: &Connection) -> Result<Vec<Edge>, String> {
             FROM edges e
             JOIN locations lf ON lf.id = e.from_location_id
             JOIN locations lt ON lt.id = e.to_location_id
+            WHERE e.status NOT IN ('expired', 'deleted')
+              AND (
+                e.expires_at IS NULL
+                OR datetime(e.expires_at) > datetime('now')
+              )
             ORDER BY e.last_seen_at DESC
             "#,
         )
@@ -4201,6 +4295,62 @@ fn load_edge_by_id(conn: &Connection, id: i64) -> Result<Edge, String> {
         edge_from_row,
     )
     .map_err(db_err)
+}
+
+fn canonicalize_normalized_edge_pair(from: &str, to: &str) -> (String, String) {
+    if from <= to {
+        (from.to_string(), to.to_string())
+    } else {
+        (to.to_string(), from.to_string())
+    }
+}
+
+fn delete_edge_by_id(conn: &mut Connection, id: i64) -> Result<bool, String> {
+    let edge = load_edge_by_id(conn, id)?;
+    delete_edge_by_locations(conn, &edge.from_location_name, &edge.to_location_name)
+}
+
+fn delete_edge_by_locations(conn: &mut Connection, from_name: &str, to_name: &str) -> Result<bool, String> {
+    let from_normalized = normalize_location_name(from_name);
+    let to_normalized = normalize_location_name(to_name);
+    if from_normalized.is_empty() || to_normalized.is_empty() {
+        return Ok(false);
+    }
+
+    let (from_normalized, to_normalized) =
+        canonicalize_normalized_edge_pair(&from_normalized, &to_normalized);
+
+    let tx = conn.transaction().map_err(db_err)?;
+    let deleted = tx
+        .execute(
+            r#"
+            UPDATE edges
+            SET status = 'deleted',
+                last_seen_at = ?3,
+                source = 'deleted'
+            WHERE status != 'deleted'
+              AND (
+                (
+                    from_location_id = (SELECT id FROM locations WHERE normalized_name = ?1)
+                    AND to_location_id = (SELECT id FROM locations WHERE normalized_name = ?2)
+                )
+                OR (
+                    from_location_id = (SELECT id FROM locations WHERE normalized_name = ?2)
+                    AND to_location_id = (SELECT id FROM locations WHERE normalized_name = ?1)
+                )
+              )
+            "#,
+            params![from_normalized, to_normalized, now()],
+        )
+        .map_err(db_err)?;
+
+    if deleted == 0 {
+        tx.rollback().map_err(db_err)?;
+        return Ok(false);
+    }
+
+    tx.commit().map_err(db_err)?;
+    Ok(true)
 }
 
 fn edge_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Edge> {
@@ -4270,6 +4420,10 @@ fn delete_isolated_locations(conn: &Connection) -> Result<(), String> {
 }
 
 fn compute_edge_status(expires_at: Option<&str>, fallback_status: &str) -> String {
+    if fallback_status == "deleted" {
+        return "deleted".to_string();
+    }
+
     let Some(expires_at) = expires_at else {
         return fallback_status.to_string();
     };
@@ -4521,7 +4675,7 @@ fn recompute_graph_layout(conn: &Connection) -> Result<(), String> {
             r#"
             SELECT from_location_id, to_location_id
             FROM edges
-            WHERE status != 'expired'
+            WHERE status NOT IN ('expired', 'deleted')
             ORDER BY id
             "#,
         )
@@ -4585,10 +4739,7 @@ fn recompute_graph_layout(conn: &Connection) -> Result<(), String> {
                 .unwrap_or(component[0])
         };
 
-        let mut levels = bfs_levels(component, &graph, root);
-        reduce_layer_crossings(&mut levels, &graph);
-
-        let local = coordinates_from_levels(&levels);
+        let local = coordinates_from_spanning_tree(component, &graph, root);
         let (min_x, max_x, min_y, max_y) = bounds_of_positions(&local);
 
         let width = (max_x - min_x).max(1.0);
@@ -5110,6 +5261,84 @@ fn barycenter(
     positions.iter().sum::<f64>() / positions.len() as f64
 }
 
+fn coordinates_from_spanning_tree(
+    component: &[i64],
+    graph: &std::collections::HashMap<i64, Vec<i64>>,
+    root: i64,
+) -> std::collections::HashMap<i64, (f64, f64)> {
+    let component_set = component.iter().copied().collect::<std::collections::HashSet<_>>();
+    let mut visited = std::collections::HashSet::<i64>::new();
+    let mut children = std::collections::HashMap::<i64, Vec<i64>>::new();
+    let mut queue = std::collections::VecDeque::<i64>::new();
+
+    visited.insert(root);
+    queue.push_back(root);
+
+    while let Some(id) = queue.pop_front() {
+        let mut neighbors = graph.get(&id).cloned().unwrap_or_default();
+        neighbors.retain(|neighbor| component_set.contains(neighbor));
+        neighbors.sort_by_key(|neighbor| {
+            let degree = graph.get(neighbor).map(|items| items.len()).unwrap_or(0);
+            (std::cmp::Reverse(degree), *neighbor)
+        });
+
+        for neighbor in neighbors {
+            if visited.insert(neighbor) {
+                children.entry(id).or_default().push(neighbor);
+                queue.push_back(neighbor);
+            }
+        }
+    }
+
+    let mut positions = std::collections::HashMap::<i64, (f64, f64)>::new();
+    let mut next_leaf_x = 0.0;
+    assign_tree_coordinates(root, 0, &children, &mut next_leaf_x, &mut positions);
+
+    for id in component {
+        if !positions.contains_key(id) {
+            assign_tree_coordinates(*id, 0, &children, &mut next_leaf_x, &mut positions);
+        }
+    }
+
+    positions
+}
+
+fn assign_tree_coordinates(
+    id: i64,
+    depth: usize,
+    children: &std::collections::HashMap<i64, Vec<i64>>,
+    next_leaf_x: &mut f64,
+    positions: &mut std::collections::HashMap<i64, (f64, f64)>,
+) -> f64 {
+    let layer_spacing = 210.0;
+    let leaf_spacing = 140.0;
+
+    let child_ids = children.get(&id).cloned().unwrap_or_default();
+    let x = if child_ids.is_empty() {
+        let x = *next_leaf_x;
+        *next_leaf_x += leaf_spacing;
+        x
+    } else {
+        let mut child_xs = Vec::<f64>::new();
+        for child in child_ids {
+            child_xs.push(assign_tree_coordinates(
+                child,
+                depth + 1,
+                children,
+                next_leaf_x,
+                positions,
+            ));
+        }
+
+        let first = child_xs.first().copied().unwrap_or(*next_leaf_x);
+        let last = child_xs.last().copied().unwrap_or(first);
+        (first + last) / 2.0
+    };
+
+    positions.insert(id, (x, -(depth as f64) * layer_spacing));
+    x
+}
+
 fn bounds_of_positions(
     positions: &std::collections::HashMap<i64, (f64, f64)>,
 ) -> (f64, f64, f64, f64) {
@@ -5394,6 +5623,7 @@ fn run_sync_once(
             expires_at: edge.expires_at,
             observations_count: Some(edge.observations_count),
             source: Some(edge.source),
+            status: Some(edge.status),
         };
         let body = serde_json::to_string(&payload).map_err(|err| err.to_string())?;
         let response_body = http_json_request("POST", &post_url, Some(&body), Some(&settings.write_token))?;
@@ -5419,6 +5649,10 @@ fn apply_sync_edge(conn: &mut Connection, edge: &SyncEdgePayload) -> Result<bool
     let to_name = edge.to_name.trim();
     if from_name.is_empty() || to_name.is_empty() {
         return Ok(false);
+    }
+
+    if edge.status.as_deref() == Some("deleted") {
+        return delete_edge_by_locations(conn, from_name, to_name);
     }
 
     let from_normalized = edge
@@ -6115,6 +6349,7 @@ fn parse_duration_seconds(line: &str) -> Option<i64> {
         .replace("second", "s")
         .replace("secs", "s")
         .replace("sec", "s");
+    let lower = merge_split_hour_digits(&lower);
     let chars = lower.chars().collect::<Vec<_>>();
     let mut index = 0;
     let mut seconds = 0;
@@ -6151,6 +6386,42 @@ fn parse_duration_seconds(line: &str) -> Option<i64> {
         index += 1;
     }
     found_unit.then_some(seconds)
+}
+
+fn merge_split_hour_digits(line: &str) -> String {
+    let tokens = line.split_whitespace().collect::<Vec<_>>();
+    if tokens.len() < 3 {
+        return line.to_string();
+    }
+
+    let mut merged = Vec::<String>::new();
+    let mut index = 0;
+
+    while index < tokens.len() {
+        if index + 2 < tokens.len()
+            && is_single_digit_token(tokens[index])
+            && is_single_digit_token(tokens[index + 1])
+            && is_hour_unit_token(tokens[index + 2])
+        {
+            merged.push(format!("{}{}", tokens[index], tokens[index + 1]));
+            merged.push(tokens[index + 2].to_string());
+            index += 3;
+            continue;
+        }
+
+        merged.push(tokens[index].to_string());
+        index += 1;
+    }
+
+    merged.join(" ")
+}
+
+fn is_single_digit_token(token: &str) -> bool {
+    token.len() == 1 && token.chars().all(|ch| ch.is_ascii_digit())
+}
+
+fn is_hour_unit_token(token: &str) -> bool {
+    matches!(token, "h" | "ч")
 }
 
 fn parse_reasonable_duration_seconds(line: &str) -> Option<i64> {
@@ -7047,6 +7318,17 @@ mod tests {
         );
         assert_eq!(parsed.destination_name.as_deref(), Some("Fynitos-Agosaum"));
         assert_eq!(parsed.expires_in_seconds, Some(18120));
+    }
+
+    #[test]
+    fn parses_split_two_digit_hour_portal_duration() {
+        let parsed = parse_portal_tooltip_ocr(
+            "Road of Avalon to\nSetent-Al-Duosas\n± 6/7\n+02:25\nClo ses in 1 1 h 39 m",
+            &[],
+            &[],
+        );
+        assert_eq!(parsed.destination_name.as_deref(), Some("Setent-Al-Duosas"));
+        assert_eq!(parsed.expires_in_seconds, Some(41940));
     }
 
     #[test]

@@ -106,6 +106,8 @@ internal sealed class MapOverlayForm : Form
     private bool _interactive;
     private bool _visible;
     private int? _selectedLocationId;
+    private int? _avalonInfoLocationId;
+    private PointF? _avalonInfoPoint;
     private readonly List<(int Id, RectangleF Rect)> _nodeRects = [];
     private Point _dragStartCursor;
     private Rectangle _dragStartBounds;
@@ -519,6 +521,7 @@ internal sealed class MapOverlayForm : Form
 
         DrawHeader(e.Graphics, data);
         DrawGraph(e.Graphics, data, GraphRect());
+        DrawAvalonInfoPopup(e.Graphics, data);
         DrawLastPortal(e.Graphics, data);
         DrawControls(e.Graphics, data);
         if (_interactive)
@@ -657,6 +660,7 @@ internal sealed class MapOverlayForm : Form
             using var outline = new Pen(Color.FromArgb(current || selected ? 242 : 115, Color.White), selected ? 3f : current ? 2f : 1f);
             g.FillEllipse(fill, nodeRect);
             g.DrawEllipse(outline, nodeRect);
+            DrawAvalonTierBorder(g, location, nodeRect, current);
 
             if (selected || string.Equals(location.Name, data.CurrentLocation, StringComparison.OrdinalIgnoreCase))
             {
@@ -787,7 +791,7 @@ internal sealed class MapOverlayForm : Form
             pair => pair.Key,
             pair => new PointF(
                 offsetX + (pair.Value.X - minX) * scale + pan.X,
-                offsetY + (pair.Value.Y - minY) * scale + pan.Y));
+                offsetY + (maxY - pair.Value.Y) * scale + pan.Y));
     }
 
     private static List<MapLocation> GraphLocations(MapOverlayData data)
@@ -795,6 +799,203 @@ internal sealed class MapOverlayForm : Form
         return data.Locations.Count > 0
             ? data.Locations.OrderBy(location => location.Id).ToList()
             : data.RouteLocations.OrderBy(location => location.Id).ToList();
+    }
+
+    private void DrawAvalonInfoPopup(Graphics g, MapOverlayData data)
+    {
+        if (!_avalonInfoLocationId.HasValue || !_avalonInfoPoint.HasValue)
+        {
+            return;
+        }
+
+        var location = data.Locations.FirstOrDefault(item => item.Id == _avalonInfoLocationId.Value);
+        if (location is null || !string.Equals(location.ZoneType, "avalon", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var chests = location.AvalonChests.Where(chest => chest.Count > 0).ToList();
+        if (chests.Count == 0)
+        {
+            return;
+        }
+
+        const float iconSize = 34f;
+        const float gap = 14f;
+        var width = chests.Count * iconSize + Math.Max(chests.Count - 1, 0) * gap + 20f;
+        const float height = 58f;
+        var point = _avalonInfoPoint.Value;
+        var box = new RectangleF(point.X + 14f, point.Y + 14f, width, height);
+
+        if (box.Right > Width - 8f)
+        {
+            box.X = point.X - width - 14f;
+        }
+
+        if (box.Bottom > Height - 8f)
+        {
+            box.Y = point.Y - height - 14f;
+        }
+
+        using var bg = new SolidBrush(Color.FromArgb(224, 8, 8, 8));
+        g.FillRoundedRectangle(bg, box, 8f);
+
+        for (var index = 0; index < chests.Count; index++)
+        {
+            var icon = new RectangleF(
+                box.Left + 10f + index * (iconSize + gap),
+                box.Top + 10f,
+                iconSize,
+                iconSize);
+            DrawChestIcon(g, chests[index], icon);
+        }
+    }
+
+    private static void DrawChestIcon(Graphics g, AvalonChestInfo chest, RectangleF rect)
+    {
+        using var body = new SolidBrush(ChestColor(chest.Color));
+        using var border = new Pen(Color.FromArgb(115, 0, 0, 0), 2f);
+        g.FillRoundedRectangle(body, rect, 5f);
+        g.DrawRoundedRectangle(border, rect, 5f);
+
+        using var highlight = new SolidBrush(Color.FromArgb(56, Color.White));
+        g.FillRoundedRectangle(
+            highlight,
+            new RectangleF(rect.Left + 5f, rect.Top + rect.Height * 0.5f, rect.Width - 10f, rect.Height * 0.32f),
+            3f);
+
+        const float bubbleSize = 22f;
+        var bubble = new RectangleF(
+            rect.Right - bubbleSize * 0.62f,
+            rect.Top - bubbleSize * 0.08f,
+            bubbleSize,
+            bubbleSize);
+        using var bubbleBrush = new SolidBrush(Color.FromArgb(239, 68, 68));
+        g.FillEllipse(bubbleBrush, bubble);
+
+        using var font = new Font("Segoe UI", 8, FontStyle.Bold);
+        using var text = new SolidBrush(Color.White);
+        var label = chest.Count.ToString();
+        var size = g.MeasureString(label, font);
+        g.DrawString(label, font, text, bubble.Left + (bubble.Width - size.Width) / 2f, bubble.Top + (bubble.Height - size.Height) / 2f - 1f);
+
+        if (string.Equals(chest.Size, "large", StringComparison.OrdinalIgnoreCase))
+        {
+            var plus = new RectangleF(rect.Right - 3f, rect.Top - 3f, 13f, 13f);
+            using var plusBrush = new SolidBrush(Color.FromArgb(249, 115, 22));
+            g.FillEllipse(plusBrush, plus);
+            using var plusFont = new Font("Segoe UI", 7, FontStyle.Bold);
+            g.DrawString("+", plusFont, text, plus.Left + 2.5f, plus.Top - 1f);
+        }
+    }
+
+    private static Color ChestColor(string? color)
+    {
+        return color switch
+        {
+            "green" => Color.FromArgb(56, 217, 64),
+            "blue" => Color.FromArgb(26, 191, 242),
+            "gold" => Color.FromArgb(255, 171, 26),
+            _ => Color.FromArgb(140, 140, 140)
+        };
+    }
+
+    private static void DrawAvalonTierBorder(Graphics g, MapLocation location, RectangleF nodeRect, bool isCurrent)
+    {
+        if (!string.Equals(location.ZoneType, "avalon", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (location.AvalonTiers.Contains(8))
+        {
+            DrawT8AvalonBorder(g, nodeRect, isCurrent);
+            return;
+        }
+
+        var tierColor = AvalonTierBorderColor(location);
+        if (!tierColor.HasValue)
+        {
+            return;
+        }
+
+        var ring = Inflate(nodeRect, 5f);
+        using var pen = new Pen(tierColor.Value, 4.5f);
+        g.DrawEllipse(pen, ring);
+    }
+
+    private static void DrawT8AvalonBorder(Graphics g, RectangleF nodeRect, bool isCurrent)
+    {
+        var outer = Inflate(nodeRect, 4f);
+        using var path = new GraphicsPath();
+        path.AddEllipse(outer);
+
+        var state = g.Save();
+        g.SetClip(path);
+        using (var white = new SolidBrush(Color.FromArgb(245, 245, 245)))
+        {
+            g.FillEllipse(white, outer);
+        }
+
+        using (var stripe = new Pen(Color.FromArgb(173, 173, 173), 2.2f))
+        {
+            const float step = 7f;
+            for (var x = outer.Left - outer.Height; x < outer.Right + outer.Height; x += step)
+            {
+                g.DrawLine(stripe, x, outer.Bottom + 4f, x + outer.Height + 8f, outer.Top - 4f);
+            }
+        }
+        g.Restore(state);
+
+        using var fill = new SolidBrush(isCurrent ? Color.FromArgb(34, 197, 94) : NodeColor(new MapLocation { ZoneType = "avalon" }, null));
+        g.FillEllipse(fill, nodeRect);
+
+        using var outline = new Pen(Color.FromArgb(242, 235, 235, 235), 1.2f);
+        g.DrawEllipse(outline, outer);
+        DrawJaggedRing(g, outer);
+    }
+
+    private static void DrawJaggedRing(Graphics g, RectangleF rect)
+    {
+        var center = new PointF(rect.Left + rect.Width / 2f, rect.Top + rect.Height / 2f);
+        var baseRadius = Math.Max(rect.Width, rect.Height) / 2f + 2f;
+        const int teeth = 18;
+        using var path = new GraphicsPath();
+        PointF? previous = null;
+
+        for (var i = 0; i < teeth * 2; i++)
+        {
+            var angle = i * MathF.PI / teeth;
+            var radius = i % 2 == 0 ? baseRadius + 3f : baseRadius - 1f;
+            var point = new PointF(
+                center.X + MathF.Cos(angle) * radius,
+                center.Y + MathF.Sin(angle) * radius);
+
+            if (i == 0)
+            {
+                path.StartFigure();
+            }
+            else
+            {
+                path.AddLine(previous!.Value, point);
+            }
+
+            previous = point;
+        }
+
+        path.CloseFigure();
+        using var pen = new Pen(Color.FromArgb(242, 235, 235, 235), 1.5f);
+        g.DrawPath(pen, path);
+    }
+
+    private static Color? AvalonTierBorderColor(MapLocation location)
+    {
+        if (location.AvalonTiers.Contains(4))
+        {
+            return Color.FromArgb(13, 115, 92);
+        }
+
+        return null;
     }
 
     private void DrawControls(Graphics g, MapOverlayData data)
@@ -858,6 +1059,28 @@ internal sealed class MapOverlayForm : Form
         }
 
         Focus();
+
+        if (e.Button == MouseButtons.Right)
+        {
+            var hit = _nodeRects.LastOrDefault(n => Contains(n.Rect, e.Location));
+            if (hit.Id != 0)
+            {
+                var location = _data.Locations.FirstOrDefault(item => item.Id == hit.Id);
+                if (location is not null && string.Equals(location.ZoneType, "avalon", StringComparison.OrdinalIgnoreCase))
+                {
+                    _avalonInfoLocationId = location.Id;
+                    _avalonInfoPoint = e.Location;
+                    _selectedLocationId = location.Id;
+                    Invalidate();
+                    return;
+                }
+            }
+
+            _avalonInfoLocationId = null;
+            _avalonInfoPoint = null;
+            Invalidate();
+            return;
+        }
 
         if (Contains(RouteFromRect(), e.Location))
         {
@@ -1091,7 +1314,7 @@ internal sealed class MapOverlayForm : Form
     }
 
     private RectangleF HeaderRect() => new(0, 0, Width, 44);
-    private RectangleF GraphRect() => new(12, 56, Math.Max(20, Width - 24), Math.Max(40, Height - 138));
+    private RectangleF GraphRect() => new(14, 54, Math.Max(20, Width - 28), Math.Max(40, Height - 118));
     private RectangleF RouteFromRect() => new(14, Height - 74, 105, 24);
     private RectangleF RouteToRect() => new(124, Height - 74, 105, 24);
     private RectangleF FindButtonRect() => new(234, Height - 74, 48, 24);
@@ -1606,6 +1829,22 @@ internal sealed class MapLocation
     public string? ZoneType { get; set; }
     public double? X { get; set; }
     public double? Y { get; set; }
+    [JsonPropertyName("avalon_tiers")]
+    public List<int> AvalonTiers { get; set; } = [];
+    [JsonPropertyName("avalon_components")]
+    public List<string> AvalonComponents { get; set; } = [];
+    [JsonPropertyName("avalon_chests")]
+    public List<AvalonChestInfo> AvalonChests { get; set; } = [];
+}
+
+internal sealed class AvalonChestInfo
+{
+    [JsonPropertyName("color")]
+    public string? Color { get; set; }
+    [JsonPropertyName("size")]
+    public string? Size { get; set; }
+    [JsonPropertyName("count")]
+    public int Count { get; set; }
 }
 
 internal sealed class MapEdge
