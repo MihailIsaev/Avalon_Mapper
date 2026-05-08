@@ -2043,6 +2043,18 @@ func clamp(_ value: CGFloat, min minValue: CGFloat, max maxValue: CGFloat) -> CG
     min(max(value, minValue), maxValue)
 }
 
+func anchoredPortalCaptureRect(selected: CGRect, anchor: CGPoint, cursor: CGPoint) -> CGRect {
+    let offsetX = selected.minX - anchor.x
+    let offsetY = selected.minY - anchor.y
+
+    return CGRect(
+        x: cursor.x + offsetX,
+        y: cursor.y + offsetY,
+        width: selected.width,
+        height: selected.height
+    ).integral
+}
+
 func runCaptureOcrMode(args: [String]) {
     let started = Date()
     let kind = argValue(args, "--kind") ?? "capture"
@@ -2062,7 +2074,7 @@ func runCaptureOcrMode(args: [String]) {
         let mouse = NSEvent.mouseLocation
         let cursor = topLeftCursorPoint(mouse)
         let selected = CGRect(x: portalX, y: portalY, width: portalWidth, height: portalHeight)
-        rect = mirroredPortalCaptureRect(
+        rect = anchoredPortalCaptureRect(
             selected: selected,
             anchor: CGPoint(x: portalAnchorX, y: portalAnchorY),
             cursor: cursor

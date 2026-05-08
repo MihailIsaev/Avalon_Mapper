@@ -3650,23 +3650,60 @@ fn run_portal_strip_capture_ocr(
         "[capture-timing] kind=portal phase=strip_regions destination={}x{} timer={}x{}",
         destination_region.width, destination_region.height, timer_region.width, timer_region.height
     );
+    let destination_anchor = destination_region.anchor_x.zip(destination_region.anchor_y);
+    let timer_anchor = timer_region.anchor_x.zip(timer_region.anchor_y);
+
     let destination = run_capture_ocr(
         app,
         state,
-        "portal",
+        "portal_destination",
         destination_region,
         false,
-        None,
+        destination_anchor,
     )?;
+
     let timer = run_capture_ocr(
         app,
         state,
-        "portal",
+        "portal_timer",
         timer_region,
         false,
-        None,
+        timer_anchor,
     )?;
     Ok(combine_portal_strip_ocr(destination, timer))
+}
+
+
+fn merge_split_second_digits(line: &str) -> String {
+    let tokens = line.split_whitespace().collect::<Vec<_>>();
+    if tokens.len() < 3 {
+        return line.to_string();
+    }
+
+    let mut merged = Vec::<String>::new();
+    let mut index = 0;
+
+    while index < tokens.len() {
+        if index + 2 < tokens.len()
+            && is_single_digit_token(tokens[index])
+            && is_single_digit_token(tokens[index + 1])
+            && is_second_unit_token(tokens[index + 2])
+        {
+            merged.push(format!("{}{}", tokens[index], tokens[index + 1]));
+            merged.push(tokens[index + 2].to_string());
+            index += 3;
+            continue;
+        }
+
+        merged.push(tokens[index].to_string());
+        index += 1;
+    }
+
+    merged.join(" ")
+}
+
+fn is_second_unit_token(token: &str) -> bool {
+    matches!(token, "s" | "с")
 }
 
 fn combine_portal_strip_ocr(destination: CaptureOcrResult, timer: CaptureOcrResult) -> CaptureOcrResult {
@@ -4184,23 +4221,27 @@ fn run_portal_strip_capture_ocr_with_helper(
         "[capture-timing] kind=portal phase=strip_regions destination={}x{} timer={}x{}",
         destination_region.width, destination_region.height, timer_region.width, timer_region.height
     );
+    let destination_anchor = destination_region.anchor_x.zip(destination_region.anchor_y);
+    let timer_anchor = timer_region.anchor_x.zip(timer_region.anchor_y);
+
     let destination = run_capture_ocr_with_helper(
         helper_path,
         capture_dir,
         paddle_ocr,
-        "portal",
+        "portal_destination",
         destination_region,
         false,
-        None,
+        destination_anchor,
     )?;
+
     let timer = run_capture_ocr_with_helper(
         helper_path,
         capture_dir,
         paddle_ocr,
-        "portal",
+        "portal_timer",
         timer_region,
         false,
-        None,
+        timer_anchor,
     )?;
     Ok(combine_portal_strip_ocr(destination, timer))
 }
@@ -6564,7 +6605,8 @@ fn parse_portal_tooltip_ocr(
             slots = parse_slots(line);
         }
         if duration.is_none() {
-            duration = parse_reasonable_duration_seconds(line)
+            duration = parse_noisy_portal_duration_with_following(line, &lines[index + 1..])
+                .or_else(|| parse_reasonable_complete_duration_seconds(line))
                 .or_else(|| parse_noisy_portal_duration_seconds(line))
                 .or_else(|| parse_noisy_portal_duration_with_next(line, next_line));
         }
@@ -6827,7 +6869,37 @@ fn is_hyphenated_location_like(value: &str) -> bool {
         letters >= 3 && part.chars().all(|ch| ch.is_alphabetic() || ch == '\'')
     })
 }
+fn merge_split_minute_digits(line: &str) -> String {
+    let tokens = line.split_whitespace().collect::<Vec<_>>();
+    if tokens.len() < 3 {
+        return line.to_string();
+    }
 
+    let mut merged = Vec::<String>::new();
+    let mut index = 0;
+
+    while index < tokens.len() {
+        if index + 2 < tokens.len()
+            && is_single_digit_token(tokens[index])
+            && is_single_digit_token(tokens[index + 1])
+            && is_minute_unit_token(tokens[index + 2])
+        {
+            merged.push(format!("{}{}", tokens[index], tokens[index + 1]));
+            merged.push(tokens[index + 2].to_string());
+            index += 3;
+            continue;
+        }
+
+        merged.push(tokens[index].to_string());
+        index += 1;
+    }
+
+    merged.join(" ")
+}
+
+fn is_minute_unit_token(token: &str) -> bool {
+    matches!(token, "m" | "м")
+}
 fn is_portal_destination_candidate_like(value: &str) -> bool {
     let normalized = normalize_location_name(value);
     if normalized.is_empty() || !has_name_letters(&normalized) {
@@ -6903,43 +6975,66 @@ fn parse_duration_seconds(line: &str) -> Option<i64> {
         .replace("second", "s")
         .replace("secs", "s")
         .replace("sec", "s");
+
     let lower = merge_split_hour_digits(&lower);
+    let lower = merge_split_minute_digits(&lower);
+    let lower = merge_split_second_digits(&lower);
     let chars = lower.chars().collect::<Vec<_>>();
     let mut index = 0;
-    let mut seconds = 0;
-    let mut found_unit = false;
+
+    let mut hours: Option<i64> = None;
+    let mut minutes: Option<i64> = None;
+    let mut secs: Option<i64> = None;
+
     while index < chars.len() {
         if !chars[index].is_ascii_digit() {
             index += 1;
             continue;
         }
+
         let start = index;
+
         while index < chars.len() && chars[index].is_ascii_digit() {
             index += 1;
         }
-        let number = chars[start..index].iter().collect::<String>().parse::<i64>().ok()?;
+
+        let number = chars[start..index]
+            .iter()
+            .collect::<String>()
+            .parse::<i64>()
+            .ok()?;
+
         while index < chars.len() && chars[index].is_whitespace() {
             index += 1;
         }
+
         let unit = chars.get(index).copied();
+
         match unit {
             Some('h') | Some('ч') => {
-                seconds += number * 3600;
-                found_unit = true;
+                hours = Some(number);
             }
             Some('m') | Some('м') => {
-                seconds += number * 60;
-                found_unit = true;
+                minutes = Some(number);
             }
             Some('s') | Some('с') => {
-                seconds += number;
-                found_unit = true;
+                secs = Some(number);
             }
             _ => {}
         }
+
         index += 1;
     }
-    found_unit.then_some(seconds)
+
+    if hours.is_none() && minutes.is_none() && secs.is_none() {
+        return None;
+    }
+
+    Some(
+        hours.unwrap_or(0) * 3600
+            + minutes.unwrap_or(0) * 60
+            + secs.unwrap_or(0)
+    )
 }
 
 fn merge_split_hour_digits(line: &str) -> String {
@@ -6982,6 +7077,51 @@ fn parse_reasonable_duration_seconds(line: &str) -> Option<i64> {
     parse_duration_seconds(line).filter(|seconds| (0..=24 * 60 * 60).contains(seconds))
 }
 
+fn parse_reasonable_complete_duration_seconds(line: &str) -> Option<i64> {
+    if looks_like_incomplete_hour_minute_fragment(line) {
+        return None;
+    }
+    parse_reasonable_duration_seconds(line)
+}
+
+fn looks_like_incomplete_hour_minute_fragment(line: &str) -> bool {
+    let lower = line.to_lowercase();
+    let tokens = lower.split_whitespace().collect::<Vec<_>>();
+    if tokens.len() < 2 {
+        return looks_like_compact_incomplete_hour_minute_fragment(&lower);
+    }
+    let has_hour_token = tokens.iter().any(|token| {
+        token == &"h"
+            || token == &"ч"
+            || token.ends_with('h') && token.chars().any(|ch| ch.is_ascii_digit())
+            || token.ends_with('ч') && token.chars().any(|ch| ch.is_ascii_digit())
+    });
+    let last_is_number = tokens
+        .last()
+        .is_some_and(|token| token.chars().all(|ch| ch.is_ascii_digit()));
+    has_hour_token && last_is_number && !lower.contains('m') && !lower.contains('м')
+}
+
+fn looks_like_compact_incomplete_hour_minute_fragment(line: &str) -> bool {
+    let compact = line
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, 'ч'))
+        .collect::<String>();
+    let Some(hour_index) = compact.find(|ch| matches!(ch, 'h' | 'ч')) else {
+        return false;
+    };
+    let before = &compact[..hour_index];
+    let after = &compact[hour_index + 1..];
+    !before.is_empty()
+        && before.chars().all(|ch| ch.is_ascii_digit())
+        && (1..=2).contains(&after.len())
+        && after.chars().all(|ch| ch.is_ascii_digit())
+        && !compact.contains('m')
+        && !compact.contains('м')
+        && !compact.contains('s')
+        && !compact.contains('с')
+}
+
 fn parse_noisy_portal_duration_seconds(line: &str) -> Option<i64> {
     if !looks_like_portal_close_line(line) {
         return None;
@@ -6995,6 +7135,32 @@ fn parse_noisy_portal_duration_with_next(line: &str, next_line: Option<&str>) ->
     }
     let next_line = next_line?;
     parse_noisy_duration_value(next_line, true).or_else(|| parse_reasonable_duration_seconds(next_line))
+}
+
+fn parse_noisy_portal_duration_with_following(line: &str, following_lines: &[String]) -> Option<i64> {
+    if !looks_like_portal_close_line(line) {
+        return None;
+    }
+
+    let mut parts = Vec::<String>::new();
+    parts.push(line.to_string());
+    let mut fallback = None;
+    for next in following_lines.iter().take(3) {
+        if is_portal_title_line(next) || parse_slots(next).is_some() || is_portal_destination_candidate_like(next) {
+            break;
+        }
+        parts.push(next.clone());
+        let joined = parts.join(" ");
+        if let Some(seconds) = parse_reasonable_duration_seconds(&joined)
+            .or_else(|| parse_noisy_duration_value(&joined, true))
+        {
+            fallback = Some(seconds);
+        }
+    }
+    let joined = parts.join(" ");
+    parse_reasonable_duration_seconds(&joined)
+        .or_else(|| parse_noisy_duration_value(&joined, true))
+        .or(fallback)
 }
 
 fn parse_noisy_duration_value(line: &str, allow_hour_minute: bool) -> Option<i64> {
@@ -8004,6 +8170,61 @@ mod tests {
         );
         assert_eq!(parsed.destination_name.as_deref(), Some("Sectun-Oc-Odesis"));
         assert_eq!(parsed.expires_in_seconds, Some(14520));
+    }
+
+    #[test]
+    fn parses_portal_duration_split_across_multiple_lines() {
+        let parsed = parse_portal_tooltip_ocr(
+            "Road of Avalon to\nCebitos-Aeaylum\nCloses in n\n9 h 25\nm",
+            &[],
+            &[],
+        );
+        assert_eq!(parsed.destination_name.as_deref(), Some("Cebitos-Aeaylum"));
+        assert_eq!(parsed.expires_in_seconds, Some(33900));
+    }
+
+    #[test]
+    fn parses_portal_duration_split_with_duplicate_in_noise() {
+        let parsed = parse_portal_tooltip_ocr(
+            "Road of Avalon to\nCebitos-Aeaylum\nCloses in in\n9 h 20\nm",
+            &[],
+            &[],
+        );
+        assert_eq!(parsed.destination_name.as_deref(), Some("Cebitos-Aeaylum"));
+        assert_eq!(parsed.expires_in_seconds, Some(33600));
+    }
+
+    #[test]
+    fn parses_portal_duration_compact_hour_split_minute_unit() {
+        let parsed = parse_portal_tooltip_ocr(
+            "Road of Avalon to\nCebitos-Aeaylum\nCloses in in\n9h 13\nm",
+            &[],
+            &[],
+        );
+        assert_eq!(parsed.destination_name.as_deref(), Some("Cebitos-Aeaylum"));
+        assert_eq!(parsed.expires_in_seconds, Some(33180));
+    }
+
+    #[test]
+    fn parses_portal_duration_compact_hour_split_second_unit() {
+        let parsed = parse_portal_tooltip_ocr(
+            "Road of Avalon to\nCebitos-Aeaylum\nCloses in in\n9h 13\ns",
+            &[],
+            &[],
+        );
+        assert_eq!(parsed.destination_name.as_deref(), Some("Cebitos-Aeaylum"));
+        assert_eq!(parsed.expires_in_seconds, Some(32413));
+    }
+
+    #[test]
+    fn parses_portal_duration_compact_hour_minute_split_unit() {
+        let parsed = parse_portal_tooltip_ocr(
+            "Road of Avalon to\nCebitos-Aeaylum\nCloses in 9h08\nm",
+            &[],
+            &[],
+        );
+        assert_eq!(parsed.destination_name.as_deref(), Some("Cebitos-Aeaylum"));
+        assert_eq!(parsed.expires_in_seconds, Some(32880));
     }
 
     #[test]
