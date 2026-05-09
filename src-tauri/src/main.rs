@@ -18,6 +18,7 @@ use std::{
 use tauri::{AppHandle, Manager};
 
 struct AppState {
+    capture_helper: Arc<Mutex<Option<CaptureHelperProcess>>>,
     db: Mutex<Connection>,
     db_path: PathBuf,
     capture_dir: PathBuf,
@@ -262,6 +263,11 @@ impl Drop for MapOverlayProcess {
         }
     }
 }
+struct CaptureHelperProcess {
+    child: Child,
+    stdin: ChildStdin,
+    stdout_rx: mpsc::Receiver<String>,
+}
 
 struct PaddleOcrProcess {
     child: Child,
@@ -351,6 +357,7 @@ impl WindowsHotkeyManager {
                                 capture_dir.clone(),
                                 Arc::clone(&overlay),
                                 Arc::clone(&paddle_ocr),
+                                Arc::clone(&state.capture_helper),
                                 "current_location",
                             );
                         }
@@ -362,6 +369,7 @@ impl WindowsHotkeyManager {
                                 capture_dir.clone(),
                                 Arc::clone(&overlay),
                                 Arc::clone(&paddle_ocr),
+                                Arc::clone(&state.capture_helper),
                                 "portal",
                             );
                         }
@@ -840,6 +848,7 @@ fn main() {
             initialize_schema(&conn).map_err(|err| format!("Could not initialize SQLite: {err}"))?;
             import_static_route_graph(&conn).map_err(|err| format!("Could not import static route graph: {err}"))?;
             let state = AppState {
+                capture_helper: Arc::new(Mutex::new(None)),
                 db: Mutex::new(conn),
                 db_path,
                 capture_dir,
@@ -871,6 +880,7 @@ fn main() {
                 }
             }
             app.manage(AppState {
+                capture_helper: Arc::new(Mutex::new(None)),
                 db: state.db,
                 db_path: state.db_path,
                 capture_dir: state.capture_dir,
@@ -2703,6 +2713,7 @@ fn ensure_map_overlay_running(app: &AppHandle, state: &AppState) -> Result<(), S
             state.capture_dir.clone(),
             Arc::clone(&state.map_overlay),
             Arc::clone(&state.paddle_ocr),
+            Arc::clone(&state.capture_helper),
         );
     }
 
@@ -2769,6 +2780,7 @@ fn spawn_map_overlay_stdout_reader(
     capture_dir: PathBuf,
     overlay: Arc<Mutex<Option<MapOverlayProcess>>>,
     paddle_ocr: Arc<Mutex<Option<PaddleOcrProcess>>>,
+    capture_helper: Arc<Mutex<Option<CaptureHelperProcess>>>,
 ) {
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
@@ -3003,6 +3015,7 @@ fn spawn_map_overlay_stdout_reader(
                             capture_dir.clone(),
                             Arc::clone(&overlay),
                             Arc::clone(&paddle_ocr),
+                            Arc::clone(&capture_helper),
                             "current_location",
                         );
                     }
@@ -3013,6 +3026,7 @@ fn spawn_map_overlay_stdout_reader(
                             capture_dir.clone(),
                             Arc::clone(&overlay),
                             Arc::clone(&paddle_ocr),
+                            Arc::clone(&capture_helper),
                             "portal",
                         );
                     }
@@ -3707,13 +3721,18 @@ fn is_second_unit_token(token: &str) -> bool {
 }
 
 fn combine_portal_strip_ocr(destination: CaptureOcrResult, timer: CaptureOcrResult) -> CaptureOcrResult {
+    let destination_text = destination.text.trim();
+    let timer_text = timer.text.trim();
+
     let text = format!(
-        "Road of Avalon to\n{}\nCloses in {}",
-        destination.text.trim(),
-        timer.text.trim()
+        "__PORTAL_STRIPS__\nDESTINATION:\n{}\nTIMER:\n{}",
+        destination_text,
+        timer_text
     );
+
     let mut lines = destination.lines;
     lines.extend(timer.lines);
+
     CaptureOcrResult {
         text,
         confidence: destination.confidence.or(timer.confidence),
@@ -3996,15 +4015,22 @@ fn apply_portal_capture(
         .map_err(|_| "Stored current location id is invalid".to_string())?;
     let current_location_name =
         get_setting(conn, "current_location_name")?.unwrap_or_else(|| "Unknown current location".to_string());
+    let t = Instant::now();
     let known = known_location_names(conn)?;
+    eprintln!("[portal-apply-prof] load_known={}ms", t.elapsed().as_millis());
+    let t = Instant::now();
     let parsed = parse_portal_tooltip_ocr(&ocr.text, &ocr.lines, &known);
-    let parsed_name = parsed
-        .destination_name
-        .clone()
+    eprintln!("[portal-apply-prof] parse={}ms", t.elapsed().as_millis());
+
+    let parsed_name = parsed.destination_name.clone()
+
         .ok_or_else(|| format!("Could not parse portal destination: {}", parsed.reason))?;
-    let match_result = match_location_name(conn, &ocr.text, &parsed_name, true)?;
-    let location_match = match_result.chosen.clone();
-    let normalized = normalize_location_name(&location_match.name);
+
+    eprintln!("[portal-apply-prof] match=0ms skipped_second_match");
+
+    let location_name = parsed_name.clone();
+    let normalized = normalize_location_name(&location_name);
+
     let metadata = serde_json::to_string(&json!({
         "parser": "portal_tooltip_v1",
         "destination_name": parsed.destination_name,
@@ -4016,24 +4042,26 @@ fn apply_portal_capture(
         "ignored_lines": parsed.ignored_lines,
         "reason": parsed.reason,
         "match": {
-            "cleaned_candidate": match_result.cleaned_candidate,
-            "top5": match_result.top5,
-            "score": match_result.chosen.score,
-            "chosen": match_result.chosen.name,
+            "cleaned_candidate": parsed_name,
+            "top5": parsed.candidates,
+            "score": parsed.confidence,
+            "chosen": location_name,
+            "source": "parser_dictionary_match"
         },
         "ocr_lines": ocr.lines
     }))
     .map_err(|err| err.to_string())?;
-    let tx = conn.transaction().map_err(db_err)?;
 
-    let zone_type = infer_zone_type_from_name(&location_match.name);
+    let zone_type = infer_zone_type_from_name(&location_name);
     if !allowed_graph_zone_type(&zone_type) {
         return Err(format!(
             "Ignored non-graph portal destination: {} ({})",
-            location_match.name, zone_type
+            location_name, zone_type
         ));
     }
-    let destination_id = upsert_location(&tx, &location_match.name, &normalized, &zone_type, false)?;
+    let db_write_started = Instant::now();
+    let tx = conn.transaction().map_err(db_err)?;
+    let destination_id = upsert_location(&tx, &location_name, &normalized, &zone_type, false)?;
 
     let edge_id = upsert_edge(
         &tx,
@@ -4046,29 +4074,31 @@ fn apply_portal_capture(
         &tx,
         "portal",
         Some(&current_location_name),
-        Some(&location_match.name),
+        Some(&location_name),
         &ocr.text,
         Some(&normalized),
         ocr.confidence,
         Some(&ocr.image_path),
         Some(&metadata),
     )?;
-    set_setting(&tx, "last_portal_destination", &location_match.name)?;
+    set_setting(&tx, "last_portal_destination", &location_name)?;
     if let Some(seconds) = parsed.expires_in_seconds {
         set_setting(&tx, "last_portal_expires_in_seconds", &seconds.to_string())?;
     }
     set_setting(
         &tx,
         "last_capture_status",
-        &format!("Portal OCR: {} ({:.0}%)", location_match.name, location_match.score * 100.0),
+        &format!("Portal OCR: {} ({:.0}%)", location_name, parsed.confidence * 100.0),
     )?;
+
     tx.commit().map_err(db_err)?;
+    eprintln!("[portal-apply-prof] db_write={}ms", db_write_started.elapsed().as_millis());
     let _ = load_edge_by_id(conn, edge_id)?;
     Ok(CaptureOutcome {
         raw_ocr_text: ocr.text.clone(),
         normalized_text: normalized,
-        matched_name: location_match.name,
-        match_confidence: location_match.score,
+        matched_name: location_name,
+        match_confidence: parsed.confidence,
         ocr_confidence: ocr.confidence,
         parsed_current: None,
         parsed_portal: Some(parsed),
@@ -4084,6 +4114,7 @@ fn spawn_hotkey_capture(
     capture_dir: PathBuf,
     overlay: Arc<Mutex<Option<MapOverlayProcess>>>,
     paddle_ocr: Arc<Mutex<Option<PaddleOcrProcess>>>,
+    capture_helper: Arc<Mutex<Option<CaptureHelperProcess>>>,
     kind: &'static str,
 ) {
     thread::spawn(move || {
@@ -4093,6 +4124,7 @@ fn spawn_hotkey_capture(
             &capture_dir,
             &overlay,
             &paddle_ocr,
+            &capture_helper,
             kind,
         ) {
             eprintln!("[capture-hotkey] {kind} capture failed: {err}");
@@ -4106,6 +4138,7 @@ fn handle_hotkey_capture(
     capture_dir: &Path,
     overlay: &Arc<Mutex<Option<MapOverlayProcess>>>,
     paddle_ocr: &Arc<Mutex<Option<PaddleOcrProcess>>>,
+    capture_helper: &Arc<Mutex<Option<CaptureHelperProcess>>>,
     kind: &str,
 ) -> Result<(), String> {
     let total_started = Instant::now();
@@ -4146,6 +4179,7 @@ fn handle_hotkey_capture(
     let started = Instant::now();
     let ocr_result = if let Some((destination_region, timer_region)) = strip_regions {
         run_portal_strip_capture_ocr_with_helper(
+            capture_helper,
             helper_path,
             capture_dir,
             paddle_ocr,
@@ -4156,6 +4190,7 @@ fn handle_hotkey_capture(
         let portal_anchor = if kind == "portal" { region.anchor_x.zip(region.anchor_y) } else { None };
         let center_cursor = if kind == "portal" { portal_anchor.is_none() } else { false };
         run_capture_ocr_with_helper(
+            capture_helper,
             helper_path,
             capture_dir,
             paddle_ocr,
@@ -4211,6 +4246,7 @@ fn handle_hotkey_capture(
 }
 
 fn run_portal_strip_capture_ocr_with_helper(
+    capture_helper: &Arc<Mutex<Option<CaptureHelperProcess>>>,
     helper_path: &Path,
     capture_dir: &Path,
     paddle_ocr: &Arc<Mutex<Option<PaddleOcrProcess>>>,
@@ -4225,6 +4261,7 @@ fn run_portal_strip_capture_ocr_with_helper(
     let timer_anchor = timer_region.anchor_x.zip(timer_region.anchor_y);
 
     let destination = run_capture_ocr_with_helper(
+        capture_helper,
         helper_path,
         capture_dir,
         paddle_ocr,
@@ -4235,6 +4272,7 @@ fn run_portal_strip_capture_ocr_with_helper(
     )?;
 
     let timer = run_capture_ocr_with_helper(
+        capture_helper,
         helper_path,
         capture_dir,
         paddle_ocr,
@@ -4246,7 +4284,66 @@ fn run_portal_strip_capture_ocr_with_helper(
     Ok(combine_portal_strip_ocr(destination, timer))
 }
 
+fn run_capture_with_persistent_helper(
+    capture_helper: &Arc<Mutex<Option<CaptureHelperProcess>>>,
+    helper_path: &Path,
+    kind: &str,
+    region: &Region,
+    center_cursor: bool,
+    portal_anchor: Option<(f64, f64)>,
+    capture_dir: &Path,
+) -> Result<CaptureOcrResult, String> {
+    let mut guard = capture_helper
+        .lock()
+        .map_err(|_| "Capture helper lock poisoned".to_string())?;
+
+    let process = ensure_capture_helper_process(&mut guard, helper_path)?;
+
+    let request = serde_json::to_string(&json!({
+        "cmd": "capture",
+        "kind": kind,
+        "x": region.x,
+        "y": region.y,
+        "width": region.width,
+        "height": region.height,
+        "display_id": region.display_id,
+        "center_cursor": center_cursor,
+        "portal_anchor_x": portal_anchor.map(|v| v.0),
+        "portal_anchor_y": portal_anchor.map(|v| v.1),
+        "portal_x": portal_anchor.map(|_| region.x),
+        "portal_y": portal_anchor.map(|_| region.y),
+        "portal_width": portal_anchor.map(|_| region.width),
+        "portal_height": portal_anchor.map(|_| region.height),
+        "output_dir": capture_dir,
+    }))
+    .map_err(|err| err.to_string())?;
+
+    process
+        .stdin
+        .write_all(request.as_bytes())
+        .map_err(|err| format!("Could not write capture helper request: {err}"))?;
+
+    process
+        .stdin
+        .write_all(b"\n")
+        .map_err(|err| format!("Could not write capture helper newline: {err}"))?;
+
+    process
+        .stdin
+        .flush()
+        .map_err(|err| format!("Could not flush capture helper request: {err}"))?;
+
+    let line = process
+        .stdout_rx
+        .recv_timeout(StdDuration::from_secs(10))
+        .map_err(|err| format!("Persistent capture helper timed out: {err}"))?;
+
+    serde_json::from_str::<CaptureOcrResult>(&line)
+        .map_err(|err| format!("Persistent capture helper returned invalid JSON: {err}; line={line}"))
+}
+
 fn run_capture_ocr_with_helper(
+    capture_helper: &Arc<Mutex<Option<CaptureHelperProcess>>>,
     helper_path: &Path,
     capture_dir: &Path,
     paddle_ocr: &Arc<Mutex<Option<PaddleOcrProcess>>>,
@@ -4254,104 +4351,22 @@ fn run_capture_ocr_with_helper(
     region: &Region,
     center_cursor: bool,
     portal_anchor: Option<(f64, f64)>,
-) -> Result<CaptureOcrResult, String> {
-    let total_started = Instant::now();
-    fs::create_dir_all(capture_dir)
-        .map_err(|err| format!("Could not create capture directory: {err}"))?;
-    let mut command = Command::new(helper_path);
-    command
-        .arg("--mode")
-        .arg("capture-ocr")
-        .arg("--kind")
-        .arg(kind)
-        .arg("--width")
-        .arg(region.width.to_string())
-        .arg("--height")
-        .arg(region.height.to_string())
-        .arg("--output-dir")
-        .arg(capture_dir);
-    if center_cursor {
-        command.arg("--center-cursor");
-    } else {
-        command
-            .arg("--x")
-            .arg(region.x.to_string())
-            .arg("--y")
-            .arg(region.y.to_string());
-    }
-    if let Some((anchor_x, anchor_y)) = portal_anchor {
-        command
-            .arg("--portal-anchor-x")
-            .arg(anchor_x.to_string())
-            .arg("--portal-anchor-y")
-            .arg(anchor_y.to_string());
-        command
-            .arg("--portal-x")
-            .arg(region.x.to_string())
-            .arg("--portal-y")
-            .arg(region.y.to_string())
-            .arg("--portal-width")
-            .arg(region.width.to_string())
-            .arg("--portal-height")
-            .arg(region.height.to_string());
-    }
-    if let Some(display_id) = &region.display_id {
-        command.arg("--display-id").arg(display_id);
-    }
-    eprintln!(
-        "[capture] running helper kind={kind} region={}x{} at {},{}",
-        region.width, region.height, region.x, region.y
-    );
-    let helper_started = Instant::now();
-    let output = command
-        .output()
-        .map_err(|err| format!("Could not run capture helper: {err}"))?;
-    let helper_ms = helper_started.elapsed().as_millis();
-    forward_child_stderr("capture-helper", &output.stderr);
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let json_line = stdout
-        .lines()
-        .last()
-        .ok_or_else(|| "Capture helper returned no data".to_string())?;
-    let result = serde_json::from_str::<CaptureOcrResult>(json_line)
-        .map_err(|err| format!("Capture helper returned invalid data: {err}"))?;
-    eprintln!(
-        "[capture-timing] kind={kind} phase=helper_process ms={helper_ms} helper_capture_ms={} image={} size={}x{}",
-        result.duration_ms, result.image_path, result.width, result.height
-    );
-    if !result.screen_recording_permission {
-        return Err(
-            "macOS Screen Recording permission is missing. Enable it for Avalon Mapper OCR in System Settings > Privacy & Security > Screen Recording, then restart the app."
-                .to_string(),
-        );
-    }
+) -> Result<CaptureOcrResult, String>  {
+    let result = run_capture_with_persistent_helper(
+        capture_helper,
+        helper_path,
+        kind,
+        region,
+        center_cursor,
+        portal_anchor,
+        capture_dir,
+    )?;
+
     let paddle_kind = if kind == "current_location" { "current" } else { kind };
-    eprintln!(
-        "[capture] running ocr kind={paddle_kind} image={}",
-        result.image_path
-    );
-    let ocr_started = Instant::now();
+
     let paddle = run_paddle_ocr(paddle_ocr, &result.image_path, paddle_kind)?;
-    let ocr_ms = ocr_started.elapsed().as_millis();
-    eprintln!(
-        "[capture-timing] kind={kind} phase=ocr_worker ms={ocr_ms} total_ms={} engine={} confidence={:?}",
-        total_started.elapsed().as_millis(),
-        paddle.engine,
-        paddle.confidence
-    );
-    eprintln!(
-        "[capture] kind={kind} image={} size={}x{} capture_ms={} ocr_engine={} ocr_confidence={:?}",
-        result.image_path,
-        result.width,
-        result.height,
-        result.duration_ms,
-        paddle.engine,
-        paddle.confidence
-    );
-    Ok(CaptureOcrResult {
+
+    return Ok(CaptureOcrResult {
         text: paddle.text,
         confidence: paddle.confidence,
         engine: paddle.engine,
@@ -4361,7 +4376,7 @@ fn run_capture_ocr_with_helper(
         duration_ms: result.duration_ms,
         screen_recording_permission: result.screen_recording_permission,
         lines: paddle.lines,
-    })
+    });
 }
 
 fn run_paddle_ocr(
@@ -4459,6 +4474,77 @@ fn run_paddle_ocr(
             .collect::<Vec<_>>()
     );
     Ok(result)
+}
+
+fn ensure_capture_helper_process<'a>(
+    process: &'a mut Option<CaptureHelperProcess>,
+    helper_path: &Path,
+) -> Result<&'a mut CaptureHelperProcess, String> {
+    let existing_alive = if let Some(existing) = process.as_mut() {
+        existing.child.try_wait().map_err(|err| err.to_string())?.is_none()
+    } else {
+        false
+    };
+
+    if existing_alive {
+        return process
+            .as_mut()
+            .ok_or_else(|| "Could not access capture helper".to_string());
+    }
+
+    *process = None;
+
+    eprintln!("[capture-helper] starting persistent helper={}", helper_path.display());
+
+    let mut child = Command::new(helper_path)
+        .arg("--mode")
+        .arg("capture-server")
+        .env("PYTHONIOENCODING", "utf-8")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|err| format!("Could not start persistent capture helper: {err}"))?;
+
+    if let Some(stderr) = child.stderr.take() {
+        thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines().flatten() {
+                eprintln!("[capture-helper] {line}");
+            }
+        });
+    }
+
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| "Could not open capture helper stdin".to_string())?;
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "Could not open capture helper stdout".to_string())?;
+
+    let (stdout_tx, stdout_rx) = mpsc::channel::<String>();
+
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines().flatten() {
+            if stdout_tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
+
+    *process = Some(CaptureHelperProcess {
+        child,
+        stdin,
+        stdout_rx,
+    });
+
+    process
+        .as_mut()
+        .ok_or_else(|| "Could not access started capture helper".to_string())
 }
 
 fn ensure_paddle_ocr_process(
@@ -6587,11 +6673,165 @@ fn current_location_candidate_rank(candidate: &str, known_locations: &[String]) 
     words * 0.12 + len_bonus + if has_dictionary_hit { 1.0 } else { 0.0 } + if substring_hit { 0.35 } else { 0.0 } - hyphen_penalty
 }
 
+fn parse_portal_strips_ocr(raw_text: &str, known_locations: &[String]) -> ParsedPortalTooltip {
+    let (destination_raw, timer_raw) = split_portal_strip_text(raw_text);
+
+    let destination_lines = destination_raw
+        .lines()
+        .map(|line| line.trim().to_string())
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>();
+
+    let destination_candidates = build_destination_candidates_from_lines(&destination_lines);
+
+    let destination = destination_candidates
+        .first()
+        .cloned()
+        .map(|candidate| choose_location_match(&candidate, known_locations, &[], true).name);
+
+    let timer_joined = timer_raw
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let expires_in_seconds = parse_reasonable_duration_seconds(&timer_joined)
+        .or_else(|| parse_duration_seconds_compactish(&timer_joined))
+        .or_else(|| parse_noisy_duration_value(&timer_joined, true));
+
+    ParsedPortalTooltip {
+        destination_name: destination,
+        slots_used: None,
+        slots_total: None,
+        expires_in_seconds,
+        confidence: if destination_candidates.is_empty() { 0.0 } else { 0.95 },
+        ignored_lines: Vec::new(),
+        candidates: destination_candidates,
+        reason: "Parsed split portal strips: destination strip + timer strip".to_string(),
+    }
+}
+
+fn split_portal_strip_text(raw_text: &str) -> (String, String) {
+    let mut destination = Vec::<String>::new();
+    let mut timer = Vec::<String>::new();
+
+    enum Section {
+        None,
+        Destination,
+        Timer,
+    }
+
+    let mut section = Section::None;
+
+    for line in raw_text.lines() {
+        let trimmed = line.trim();
+
+        match trimmed {
+            "__PORTAL_STRIPS__" => continue,
+            "DESTINATION:" => {
+                section = Section::Destination;
+                continue;
+            }
+            "TIMER:" => {
+                section = Section::Timer;
+                continue;
+            }
+            _ => {}
+        }
+
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        match section {
+            Section::Destination => destination.push(trimmed.to_string()),
+            Section::Timer => timer.push(trimmed.to_string()),
+            Section::None => {}
+        }
+    }
+
+    (destination.join("\n"), timer.join("\n"))
+}
+
+fn build_destination_candidates_from_lines(lines: &[String]) -> Vec<String> {
+    let mut candidates = Vec::<String>::new();
+
+    for line in lines {
+        let cleaned = clean_portal_destination_candidate(line);
+        if !cleaned.is_empty() && is_portal_destination_candidate_like(&cleaned) {
+            candidates.push(cleaned);
+        }
+    }
+
+    for window in lines.windows(2) {
+        let first = clean_portal_destination_candidate(&window[0]);
+        let second = clean_portal_destination_candidate(&window[1]);
+
+        if first.is_empty() || second.is_empty() {
+            continue;
+        }
+
+        let space_joined = format!("{first} {second}");
+        let hyphen_joined = format!("{first}-{second}");
+
+        if is_portal_destination_candidate_like(&space_joined) {
+            candidates.push(space_joined);
+        }
+
+        if is_portal_destination_candidate_like(&hyphen_joined) {
+            candidates.push(hyphen_joined);
+        }
+    }
+
+    candidates.sort_by_key(|candidate| {
+        let normalized = normalize_location_name(candidate);
+        std::cmp::Reverse((
+            normalized.contains('-') as i32,
+            candidate.split_whitespace().count() as i32,
+            candidate.len() as i32,
+        ))
+    });
+
+    candidates.dedup();
+    candidates
+}
+
+fn parse_duration_seconds_compactish(line: &str) -> Option<i64> {
+    let lower = line
+        .to_lowercase()
+        .replace("hours", "h")
+        .replace("hour", "h")
+        .replace("hrs", "h")
+        .replace("hr", "h")
+        .replace("minutes", "m")
+        .replace("minute", "m")
+        .replace("mins", "m")
+        .replace("min", "m")
+        .replace("seconds", "s")
+        .replace("second", "s")
+        .replace("secs", "s")
+        .replace("sec", "s")
+        .replace("closes", "")
+        .replace("close", "")
+        .replace("in", "");
+
+    let compact = lower
+        .chars()
+        .filter(|ch| !ch.is_whitespace())
+        .collect::<String>();
+
+    parse_duration_seconds(&compact)
+}
+
 fn parse_portal_tooltip_ocr(
     raw_text: &str,
     ocr_lines: &[OcrLine],
     known_locations: &[String],
 ) -> ParsedPortalTooltip {
+    if raw_text.starts_with("__PORTAL_STRIPS__") {
+        return parse_portal_strips_ocr(raw_text, known_locations);
+    }
     let lines = ocr_candidate_lines(raw_text, ocr_lines);
     let mut ignored_lines = Vec::new();
     let mut candidates = Vec::new();
@@ -6625,8 +6865,26 @@ fn parse_portal_tooltip_ocr(
             continue;
         }
         let cleaned = clean_portal_destination_candidate(line);
+
         if !cleaned.is_empty() && is_portal_destination_candidate_like(&cleaned) {
-            candidates.push(cleaned);
+            candidates.push(cleaned.clone());
+
+            if let Some(next) = lines.get(index + 1) {
+                if !is_portal_title_line(next)
+                    && parse_slots(next).is_none()
+                    && !looks_like_portal_close_line(next)
+                    && parse_reasonable_duration_seconds(next).is_none()
+                    && !is_plain_timer_line(next)
+                    && !is_icon_garbage(next)
+                {
+                    let next_cleaned = clean_portal_destination_candidate(next);
+
+                    if !next_cleaned.is_empty() && is_portal_destination_candidate_like(&next_cleaned) {
+                        candidates.push(format!("{cleaned} {next_cleaned}"));
+                        candidates.push(format!("{cleaned}-{next_cleaned}"));
+                    }
+                }
+            }
         } else {
             ignored_lines.push(line.clone());
         }
@@ -7954,6 +8212,40 @@ mod tests {
                 .map(|line| line.to_string())
                 .collect(),
         )
+    }
+
+    #[test]
+    fn parses_split_two_line_portal_destination() {
+        let known = vec![
+            "Farshore Esker".to_string(),
+            "Deepwood Pines".to_string(),
+            "Drownfield Slough".to_string(),
+            "Farshore Bay".to_string(),
+            "Deepwood Dell".to_string(),
+            "Pinecopse".to_string(),
+            "Slimehag".to_string(),
+        ];
+
+        let parsed = parse_portal_tooltip_ocr(
+            "Road of Avalon to\nFarshore\nEsker\nCloses in 8 h 50 m",
+            &[],
+            &known,
+        );
+        assert_eq!(parsed.destination_name.as_deref(), Some("Farshore Esker"));
+
+        let parsed = parse_portal_tooltip_ocr(
+            "Road of Avalon to\nDeepwood\nPines\nCloses in 14h 47\nm",
+            &[],
+            &known,
+        );
+        assert_eq!(parsed.destination_name.as_deref(), Some("Deepwood Pines"));
+
+        let parsed = parse_portal_tooltip_ocr(
+            "Road of Avalon to\nDrownfield\nSlough\nCloses in 17 h 25 m",
+            &[],
+            &known,
+        );
+        assert_eq!(parsed.destination_name.as_deref(), Some("Drownfield Slough"));
     }
 
     #[test]

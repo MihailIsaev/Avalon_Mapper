@@ -161,7 +161,23 @@ struct CaptureOcrBbox: Encodable {
     let width: Double
     let height: Double
 }
-
+struct CaptureServerRequest: Decodable {
+    let cmd: String
+    let kind: String
+    let x: Int
+    let y: Int
+    let width: Int
+    let height: Int
+    let display_id: String?
+    let center_cursor: Bool?
+    let portal_anchor_x: Double?
+    let portal_anchor_y: Double?
+    let portal_x: Int?
+    let portal_y: Int?
+    let portal_width: Int?
+    let portal_height: Int?
+    let output_dir: String
+}
 final class SelectionPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
@@ -2055,25 +2071,31 @@ func anchoredPortalCaptureRect(selected: CGRect, anchor: CGPoint, cursor: CGPoin
     ).integral
 }
 
-func runCaptureOcrMode(args: [String]) {
+func runCaptureRequest(
+    kind: String,
+    outputDir: String,
+    width: CGFloat,
+    height: CGFloat,
+    centerCursor: Bool,
+    portalX: CGFloat?,
+    portalY: CGFloat?,
+    portalWidth: CGFloat?,
+    portalHeight: CGFloat?,
+    portalAnchorX: Double?,
+    portalAnchorY: Double?,
+    x: CGFloat,
+    y: CGFloat
+) -> CaptureOcrOutput? {
     let started = Date()
-    let kind = argValue(args, "--kind") ?? "capture"
-    let outputDir = argValue(args, "--output-dir") ?? NSTemporaryDirectory()
-    let width = CGFloat(Int(argValue(args, "--width") ?? "320") ?? 320)
-    let height = CGFloat(Int(argValue(args, "--height") ?? "180") ?? 180)
-    let centerCursor = args.contains("--center-cursor")
-    let portalX = argValue(args, "--portal-x").flatMap { CGFloat(Int($0) ?? 0) }
-    let portalY = argValue(args, "--portal-y").flatMap { CGFloat(Int($0) ?? 0) }
-    let portalWidth = argValue(args, "--portal-width").flatMap { CGFloat(Int($0) ?? 0) }
-    let portalHeight = argValue(args, "--portal-height").flatMap { CGFloat(Int($0) ?? 0) }
-    let portalAnchorX = argValue(args, "--portal-anchor-x").flatMap(Double.init)
-    let portalAnchorY = argValue(args, "--portal-anchor-y").flatMap(Double.init)
+
     let rect: CGRect
     let rectStarted = Date()
+
     if let portalX, let portalY, let portalWidth, let portalHeight, let portalAnchorX, let portalAnchorY {
         let mouse = NSEvent.mouseLocation
         let cursor = topLeftCursorPoint(mouse)
         let selected = CGRect(x: portalX, y: portalY, width: portalWidth, height: portalHeight)
+
         rect = anchoredPortalCaptureRect(
             selected: selected,
             anchor: CGPoint(x: portalAnchorX, y: portalAnchorY),
@@ -2083,6 +2105,7 @@ func runCaptureOcrMode(args: [String]) {
         let mouse = NSEvent.mouseLocation
         let screen = screenContaining(point: mouse) ?? NSScreen.main ?? NSScreen.screens.first
         let screenFrame = screen?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+
         rect = CGRect(
             x: mouse.x - width / 2,
             y: screenFrame.maxY - mouse.y - height / 2,
@@ -2090,35 +2113,41 @@ func runCaptureOcrMode(args: [String]) {
             height: height
         )
     } else {
-        let x = CGFloat(Int(argValue(args, "--x") ?? "0") ?? 0)
-        let y = CGFloat(Int(argValue(args, "--y") ?? "0") ?? 0)
         rect = CGRect(x: x, y: y, width: width, height: height)
     }
+
     fputs("[capture-helper-timing] kind=\(kind) phase=rect ms=\(Int(Date().timeIntervalSince(rectStarted) * 1000)) rect=\(rect)\n", stderr)
     fflush(stderr)
 
-    if overlayResizeDebug {
-        fputs("[capture-helper] kind=\(kind) rect=\(rect) portalAnchor=(\(String(describing: portalAnchorX)),\(String(describing: portalAnchorY)))\n", stderr)
-        fflush(stderr)
-    }
-
     let permissionStarted = Date()
     let permission = CGPreflightScreenCaptureAccess()
+
     fputs("[capture-helper-timing] kind=\(kind) phase=permission ms=\(Int(Date().timeIntervalSince(permissionStarted) * 1000)) allowed=\(permission)\n", stderr)
     fflush(stderr)
+
     let captureStarted = Date()
-    guard let image = CGWindowListCreateImage(rect, .optionOnScreenOnly, kCGNullWindowID, [.bestResolution, .nominalResolution]) else {
+
+    guard let image = CGWindowListCreateImage(
+        rect,
+        .optionOnScreenOnly,
+        kCGNullWindowID,
+        [.bestResolution, .nominalResolution]
+    ) else {
         fputs("Could not capture screen region. Grant Screen Recording permission and use Windowed/Borderless mode.\n", stderr)
-        exit(2)
+        fflush(stderr)
+        return nil
     }
+
     fputs("[capture-helper-timing] kind=\(kind) phase=screen_capture ms=\(Int(Date().timeIntervalSince(captureStarted) * 1000)) size=\(image.width)x\(image.height)\n", stderr)
     fflush(stderr)
 
     let saveStarted = Date()
     let imagePath = saveCaptureImage(image: image, outputDir: outputDir, kind: kind)
+
     fputs("[capture-helper-timing] kind=\(kind) phase=save_png ms=\(Int(Date().timeIntervalSince(saveStarted) * 1000)) total_ms=\(Int(Date().timeIntervalSince(started) * 1000)) path=\(imagePath)\n", stderr)
     fflush(stderr)
-    let output = CaptureOcrOutput(
+
+    return CaptureOcrOutput(
         text: "",
         confidence: nil,
         engine: "capture_only",
@@ -2129,8 +2158,106 @@ func runCaptureOcrMode(args: [String]) {
         screen_recording_permission: permission,
         lines: []
     )
-    if let data = try? JSONEncoder().encode(output), let json = String(data: data, encoding: .utf8) {
+}
+func runCaptureOcrMode(args: [String]) {
+    let kind = argValue(args, "--kind") ?? "capture"
+    let outputDir = argValue(args, "--output-dir") ?? NSTemporaryDirectory()
+    let width = CGFloat(Int(argValue(args, "--width") ?? "320") ?? 320)
+    let height = CGFloat(Int(argValue(args, "--height") ?? "180") ?? 180)
+    let centerCursor = args.contains("--center-cursor")
+
+    let portalX = argValue(args, "--portal-x").flatMap { CGFloat(Int($0) ?? 0) }
+    let portalY = argValue(args, "--portal-y").flatMap { CGFloat(Int($0) ?? 0) }
+    let portalWidth = argValue(args, "--portal-width").flatMap { CGFloat(Int($0) ?? 0) }
+    let portalHeight = argValue(args, "--portal-height").flatMap { CGFloat(Int($0) ?? 0) }
+    let portalAnchorX = argValue(args, "--portal-anchor-x").flatMap(Double.init)
+    let portalAnchorY = argValue(args, "--portal-anchor-y").flatMap(Double.init)
+
+    let x = CGFloat(Int(argValue(args, "--x") ?? "0") ?? 0)
+    let y = CGFloat(Int(argValue(args, "--y") ?? "0") ?? 0)
+
+    guard let output = runCaptureRequest(
+        kind: kind,
+        outputDir: outputDir,
+        width: width,
+        height: height,
+        centerCursor: centerCursor,
+        portalX: portalX,
+        portalY: portalY,
+        portalWidth: portalWidth,
+        portalHeight: portalHeight,
+        portalAnchorX: portalAnchorX,
+        portalAnchorY: portalAnchorY,
+        x: x,
+        y: y
+    ) else {
+        exit(2)
+    }
+
+    if let data = try? JSONEncoder().encode(output),
+       let json = String(data: data, encoding: .utf8) {
         print(json)
+        fflush(stdout)
+    }
+}
+
+func runCaptureServerMode() {
+    let decoder = JSONDecoder()
+    let encoder = JSONEncoder()
+
+    fputs("[capture-server] ready\n", stderr)
+    fflush(stderr)
+
+    while let line = readLine() {
+        guard let data = line.data(using: .utf8) else {
+            continue
+        }
+
+        do {
+            let request = try decoder.decode(CaptureServerRequest.self, from: data)
+
+            guard request.cmd == "capture" else {
+                continue
+            }
+
+            guard let output = runCaptureRequest(
+                kind: request.kind,
+                outputDir: request.output_dir,
+                width: CGFloat(request.width),
+                height: CGFloat(request.height),
+                centerCursor: request.center_cursor ?? false,
+                portalX: request.portal_x.map { CGFloat($0) },
+                portalY: request.portal_y.map { CGFloat($0) },
+                portalWidth: request.portal_width.map { CGFloat($0) },
+                portalHeight: request.portal_height.map { CGFloat($0) },
+                portalAnchorX: request.portal_anchor_x,
+                portalAnchorY: request.portal_anchor_y,
+                x: CGFloat(request.x),
+                y: CGFloat(request.y)
+            ) else {
+                let errorOutput = [
+                    "ok": false,
+                    "error": "capture failed"
+                ] as [String : Any]
+
+                if let data = try? JSONSerialization.data(withJSONObject: errorOutput),
+                   let json = String(data: data, encoding: .utf8) {
+                    print(json)
+                    fflush(stdout)
+                }
+
+                continue
+            }
+
+            let data = try encoder.encode(output)
+            if let json = String(data: data, encoding: .utf8) {
+                print(json)
+                fflush(stdout)
+            }
+        } catch {
+            fputs("[capture-server] error=\(error)\n", stderr)
+            fflush(stderr)
+        }
     }
 }
 
@@ -2231,6 +2358,8 @@ let mode = modeIndex.flatMap { index in
 let app = NSApplication.shared
 if mode == "capture-ocr" {
     runCaptureOcrMode(args: args)
+} else if mode == "capture-server" {
+    runCaptureServerMode()
 } else if mode == "map-overlay" {
     let boundsIndex = args.firstIndex(of: "--bounds-state")
     let boundsStatePath = boundsIndex.flatMap { index in
