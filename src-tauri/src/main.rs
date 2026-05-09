@@ -4364,7 +4364,7 @@ fn run_capture_ocr_with_helper(
 ) -> Result<CaptureOcrResult, String>  {
     #[cfg(target_os = "windows")]
     {
-        return run_capture_ocr_once(
+        return run_capture_ocr(
             helper_path,
             capture_dir,
             paddle_ocr,
