@@ -99,6 +99,29 @@ def get_ocr():
         ocr = initialize_ocr()
     return ocr
 
+def prepare_image_for_ocr(image_path: str, kind: str) -> str:
+    if kind not in ("portal_timer", "portal_destination"):
+        return image_path
+
+    try:
+        from PIL import Image
+
+        img = Image.open(image_path).convert("RGB")
+        scale = 3
+
+        upscaled = img.resize(
+            (img.width * scale, img.height * scale),
+            Image.Resampling.LANCZOS,
+        )
+
+        root, ext = os.path.splitext(image_path)
+        upscaled_path = f"{root}-ocrx{scale}{ext}"
+        upscaled.save(upscaled_path)
+        return upscaled_path
+    except Exception as exc:
+        print(f"[ocr] upscale_failed kind={kind} image={image_path} error={exc}", file=sys.stderr, flush=True)
+        return image_path
+
 def is_bad_current_location_line(text: str) -> bool:
     text = text.strip()
 
@@ -163,7 +186,8 @@ def main():
 
 def run_ocr(kind: str, image_path: str) -> dict:
     started = time.perf_counter()
-    lines = run_engine(image_path)
+    ocr_image_path = prepare_image_for_ocr(image_path, kind)
+    lines = run_engine(ocr_image_path)
     duration_ms = int((time.perf_counter() - started) * 1000)
 
     if kind == "current":
@@ -176,7 +200,7 @@ def run_ocr(kind: str, image_path: str) -> dict:
         )
 
     print(
-        f"[ocr] engine={engine_name} kind={kind} image={image_path} "
+        f"[ocr] engine={engine_name} kind={kind} image={image_path} ocr_image={ocr_image_path}"
         f"duration_ms={duration_ms} raw_lines={lines}",
         file=sys.stderr,
         flush=True,
