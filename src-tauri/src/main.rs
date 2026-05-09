@@ -845,11 +845,15 @@ fn main() {
                 fs::create_dir_all(parent)
                     .map_err(|err| format!("Could not create app data directory: {err}"))?;
             }
-            let capture_dir = app
-                .path()
-                .app_data_dir()
-                .map_err(|err| format!("Could not resolve app data directory: {err}"))?
-                .join("captures");
+            let capture_dir = if cfg!(target_os = "windows") {
+                PathBuf::from(r"C:\avalon_captures")
+            } else {
+                app
+                    .path()
+                    .app_data_dir()
+                    .map_err(|err| format!("Could not resolve app data directory: {err}"))?
+                    .join("captures")
+            };
             fs::create_dir_all(&capture_dir)
                 .map_err(|err| format!("Could not create capture directory: {err}"))?;
             let conn = open_database(&db_path)
@@ -4368,9 +4372,20 @@ fn run_capture_with_persistent_helper(
         .stdout_rx
         .recv_timeout(StdDuration::from_secs(10))
         .map_err(|err| format!("Persistent capture helper timed out: {err}"))?;
+    let value: serde_json::Value =
+        serde_json::from_str(&line)
+            .map_err(|err| format!("Invalid JSON from helper: {err}; line={line}"))?;
 
-    serde_json::from_str::<CaptureOcrResult>(&line)
-        .map_err(|err| format!("Persistent capture helper returned invalid JSON: {err}; line={line}"))
+    if value.get("ok") == Some(&serde_json::Value::Bool(false)) {
+        return Err(value
+            .get("error")
+            .and_then(|e| e.as_str())
+            .unwrap_or("Unknown capture helper error")
+            .to_string());
+    }
+
+    serde_json::from_value::<CaptureOcrResult>(value)
+        .map_err(|err| format!("Invalid CaptureOcrResult: {err}"))
 }
 fn run_capture_ocr_with_helper(
     capture_helper: &Arc<Mutex<Option<CaptureHelperProcess>>>,
