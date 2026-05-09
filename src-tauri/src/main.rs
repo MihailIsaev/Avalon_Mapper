@@ -4299,7 +4299,7 @@ fn run_portal_strip_capture_ocr_with_helper(
         "portal_destination",
         destination_region,
         false,
-        None,
+        destination_anchor,
     )?;
 
     let timer = run_capture_ocr_with_helper(
@@ -4310,7 +4310,7 @@ fn run_portal_strip_capture_ocr_with_helper(
         "portal_timer",
         timer_region,
         false,
-        None,
+        timer_anchor,
     )?;
     Ok(combine_portal_strip_ocr(destination, timer))
 }
