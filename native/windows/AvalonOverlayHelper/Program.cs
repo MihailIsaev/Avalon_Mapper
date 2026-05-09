@@ -42,6 +42,9 @@ internal static class Program
                 case "capture-ocr":
                     CaptureOcr.Run(args);
                     return 0;
+                case "capture-server":
+                    CaptureOcr.RunServer(args);
+                    return 0;
                 default:
                     Console.Error.WriteLine($"Unknown mode: {mode}");
                     return 2;
@@ -1709,6 +1712,156 @@ internal static class CaptureOcr
             []));
     }
 
+    internal static void RunServer(string[] args)
+    {
+        Console.Error.WriteLine("[capture-helper] server_ready");
+        Console.Error.Flush();
+
+        string? line;
+        while ((line = Console.In.ReadLine()) != null)
+        {
+            try
+            {
+                var request = JsonSerializer.Deserialize<CaptureRequest>(line, Program.JsonOptions);
+                if (request is null || request.Cmd != "capture")
+                {
+                    Program.WriteJson(new { ok = false, error = "Unknown capture request" });
+                    continue;
+                }
+
+                var result = Capture(request);
+                Program.WriteJson(result);
+            }
+            catch (Exception ex)
+            {
+                Program.WriteJson(new { ok = false, error = ex.Message });
+            }
+        }
+    }
+
+    internal sealed class CaptureRequest
+    {
+        [JsonPropertyName("cmd")]
+        public string? Cmd { get; set; }
+
+        [JsonPropertyName("kind")]
+        public string? Kind { get; set; }
+
+        [JsonPropertyName("x")]
+        public int X { get; set; }
+
+        [JsonPropertyName("y")]
+        public int Y { get; set; }
+
+        [JsonPropertyName("width")]
+        public int Width { get; set; }
+
+        [JsonPropertyName("height")]
+        public int Height { get; set; }
+
+        [JsonPropertyName("display_id")]
+        public string? DisplayId { get; set; }
+
+        [JsonPropertyName("center_cursor")]
+        public bool CenterCursor { get; set; }
+
+        [JsonPropertyName("portal_anchor_x")]
+        public double? PortalAnchorX { get; set; }
+
+        [JsonPropertyName("portal_anchor_y")]
+        public double? PortalAnchorY { get; set; }
+
+        [JsonPropertyName("portal_x")]
+        public int? PortalX { get; set; }
+
+        [JsonPropertyName("portal_y")]
+        public int? PortalY { get; set; }
+
+        [JsonPropertyName("portal_width")]
+        public int? PortalWidth { get; set; }
+
+        [JsonPropertyName("portal_height")]
+        public int? PortalHeight { get; set; }
+
+        [JsonPropertyName("output_dir")]
+        public string? OutputDir { get; set; }
+    }
+    private static CaptureOcrResult Capture(CaptureRequest request)
+    {
+        var started = Stopwatch.StartNew();
+
+        var kind = request.Kind ?? "capture";
+        var outputDir = request.OutputDir ?? Path.GetTempPath();
+        var width = Math.Max(1, request.Width);
+        var height = Math.Max(1, request.Height);
+
+        var rectStarted = Stopwatch.StartNew();
+        var rect = CaptureRect(request, width, height);
+
+        Console.Error.WriteLine($"[capture-helper] rect={rect.X},{rect.Y} {rect.Width}x{rect.Height}");
+        Console.Error.WriteLine($"[capture-helper-timing] kind={kind} phase=rect ms={rectStarted.ElapsedMilliseconds} rect={rect.Left},{rect.Top},{rect.Width}x{rect.Height}");
+
+        Directory.CreateDirectory(outputDir);
+
+        var captureStarted = Stopwatch.StartNew();
+        using var bitmap = new Bitmap(Math.Max(1, rect.Width), Math.Max(1, rect.Height));
+        using (var graphics = Graphics.FromImage(bitmap))
+        {
+            graphics.CopyFromScreen(rect.Left, rect.Top, 0, 0, rect.Size, CopyPixelOperation.SourceCopy);
+        }
+
+        Console.Error.WriteLine($"[capture-helper-timing] kind={kind} phase=screen_capture ms={captureStarted.ElapsedMilliseconds} size={bitmap.Width}x{bitmap.Height}");
+
+        var imagePath = Path.Combine(outputDir, $"{SanitizeFileName(kind)}-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}.png");
+
+        var saveStarted = Stopwatch.StartNew();
+        bitmap.Save(imagePath, System.Drawing.Imaging.ImageFormat.Png);
+
+        Console.Error.WriteLine($"[capture-helper-timing] kind={kind} phase=save_png ms={saveStarted.ElapsedMilliseconds} total_ms={started.ElapsedMilliseconds} path={imagePath}");
+
+        return new CaptureOcrResult(
+            "",
+            null,
+            "capture_only",
+            imagePath,
+            bitmap.Width,
+            bitmap.Height,
+            started.ElapsedMilliseconds,
+            true,
+            []);
+    }
+    private static Rectangle CaptureRect(CaptureRequest request, int width, int height)
+    {
+        if (request.PortalX.HasValue
+            && request.PortalY.HasValue
+            && request.PortalWidth.HasValue
+            && request.PortalHeight.HasValue
+            && request.PortalWidth.Value > 0
+            && request.PortalHeight.Value > 0
+            && request.PortalAnchorX.HasValue
+            && request.PortalAnchorY.HasValue)
+        {
+            var cursor = Cursor.Position;
+
+            var offsetX = request.PortalX.Value - (int)Math.Round(request.PortalAnchorX.Value);
+            var offsetY = request.PortalY.Value - (int)Math.Round(request.PortalAnchorY.Value);
+
+            return new Rectangle(
+                cursor.X + offsetX,
+                cursor.Y + offsetY,
+                request.PortalWidth.Value,
+                request.PortalHeight.Value
+            );
+        }
+
+        if (request.CenterCursor)
+        {
+            var cursor = Cursor.Position;
+            return new Rectangle(cursor.X - width / 2, cursor.Y - height / 2, width, height);
+        }
+
+        return new Rectangle(request.X, request.Y, width, height);
+    }
     private static Rectangle CaptureRect(string[] args, int width, int height)
     {
         var portalX = Args.IntValue(args, "--portal-x", int.MinValue);
