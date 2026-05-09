@@ -4151,13 +4151,6 @@ fn handle_hotkey_capture(
     capture_helper: &Arc<Mutex<Option<CaptureHelperProcess>>>,
     kind: &str,
 ) -> Result<(), String> {
-    let total_started = Instant::now();
-    let Some(_capture_guard) = HotkeyCaptureGuard::try_acquire() else {
-        eprintln!(
-            "[capture-hotkey] ignoring {kind} capture because capture queue is full ({MAX_HOTKEY_CAPTURE_QUEUE})"
-        );
-        return Ok(());
-    };
     eprintln!(
         "[capture-hotkey] {kind} capture requested from overlay hotkey pending={}",
         HotkeyCaptureGuard::pending_count()
@@ -4187,7 +4180,21 @@ fn handle_hotkey_capture(
         let _ = send_map_overlay_command_direct(overlay, json!({ "type": "data", "data": data }));
     }
     let started = Instant::now();
-    let ocr_result = if let Some((destination_region, timer_region)) = strip_regions {
+
+let ocr_result = {
+    let Some(_capture_guard) = HotkeyCaptureGuard::try_acquire() else {
+        eprintln!(
+            "[capture-hotkey] ignoring {kind} capture because capture queue is full ({MAX_HOTKEY_CAPTURE_QUEUE})"
+        );
+        return Ok(());
+    };
+
+    eprintln!(
+        "[capture-hotkey] {kind} capture requested from overlay hotkey pending={}",
+        HotkeyCaptureGuard::pending_count()
+    );
+
+    if let Some((destination_region, timer_region)) = strip_regions {
         run_portal_strip_capture_ocr_with_helper(
             capture_helper,
             helper_path,
@@ -4197,18 +4204,31 @@ fn handle_hotkey_capture(
             &timer_region,
         )
     } else {
-        let portal_anchor = if kind == "portal" { region.anchor_x.zip(region.anchor_y) } else { None };
-        let center_cursor = if kind == "portal" { portal_anchor.is_none() } else { false };
-        run_capture_ocr_with_helper(
-            capture_helper,
-            helper_path,
-            capture_dir,
-            paddle_ocr,
-            kind,
-            &region,
-            center_cursor,
-            portal_anchor,
-        )
+        let portal_anchor =
+                if kind == "portal" {
+                    region.anchor_x.zip(region.anchor_y)
+                } else {
+                    None
+                };
+
+            let center_cursor =
+                if kind == "portal" {
+                    portal_anchor.is_none()
+                } else {
+                    false
+                };
+
+            run_capture_ocr_with_helper(
+                capture_helper,
+                helper_path,
+                capture_dir,
+                paddle_ocr,
+                kind,
+                &region,
+                center_cursor,
+                portal_anchor,
+            )
+        }
     };
     let ocr = match ocr_result {
         Ok(ocr) => ocr,
@@ -4278,7 +4298,7 @@ fn run_portal_strip_capture_ocr_with_helper(
         "portal_destination",
         destination_region,
         false,
-        destination_anchor,
+        None,
     )?;
 
     let timer = run_capture_ocr_with_helper(
@@ -4289,7 +4309,7 @@ fn run_portal_strip_capture_ocr_with_helper(
         "portal_timer",
         timer_region,
         false,
-        timer_anchor,
+        None,
     )?;
     Ok(combine_portal_strip_ocr(destination, timer))
 }
@@ -4351,6 +4371,7 @@ fn run_capture_with_persistent_helper(
     serde_json::from_str::<CaptureOcrResult>(&line)
         .map_err(|err| format!("Persistent capture helper returned invalid JSON: {err}; line={line}"))
 }
+
 fn run_capture_ocr_with_helper(
     capture_helper: &Arc<Mutex<Option<CaptureHelperProcess>>>,
     helper_path: &Path,
