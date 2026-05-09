@@ -300,12 +300,21 @@ enum WindowsHotkeyCommand {
 #[cfg(target_os = "windows")]
 impl WindowsHotkeyManager {
     fn start(
+
         settings: HotkeySettings,
+
         db_path: PathBuf,
+
         helper_path: PathBuf,
+
         capture_dir: PathBuf,
+
         overlay: Arc<Mutex<Option<MapOverlayProcess>>>,
+
         paddle_ocr: Arc<Mutex<Option<PaddleOcrProcess>>>,
+
+        capture_helper: Arc<Mutex<Option<CaptureHelperProcess>>>,
+
     ) -> Self {
         let (sender, receiver) = mpsc::channel::<WindowsHotkeyCommand>();
         let thread_id = Arc::new(Mutex::new(None));
@@ -357,7 +366,7 @@ impl WindowsHotkeyManager {
                                 capture_dir.clone(),
                                 Arc::clone(&overlay),
                                 Arc::clone(&paddle_ocr),
-                                Arc::clone(&state.capture_helper),
+                                Arc::clone(&capture_helper),
                                 "current_location",
                             );
                         }
@@ -369,7 +378,7 @@ impl WindowsHotkeyManager {
                                 capture_dir.clone(),
                                 Arc::clone(&overlay),
                                 Arc::clone(&paddle_ocr),
-                                Arc::clone(&state.capture_helper),
+                                Arc::clone(&capture_helper),
                                 "portal",
                             );
                         }
@@ -1138,6 +1147,7 @@ fn start_windows_hotkey_manager(
         state.capture_dir.clone(),
         Arc::clone(&state.map_overlay),
         Arc::clone(&state.paddle_ocr),
+        Arc::clone(&state.capture_helper),
     ))
 }
 
