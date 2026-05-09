@@ -1471,15 +1471,35 @@ internal sealed class SelectionForm : Form
         {
             _anchor = PointToScreen(e.Location);
             FreezeCurrentScreen();
+
             _portalStripStep = 1;
+
+            _portalDestinationRect = null;
+
             _dragging = false;
+
+            _start = Point.Empty;
+
+            _current = Point.Empty;
+
             Invalidate();
+
             return;
         }
-
         if (_mode == "portal-strips" && _frozenImage is null)
+
         {
+
             return;
+
+        }
+
+        if (_mode == "portal-strips" && e.Button != MouseButtons.Left)
+
+        {
+
+            return;
+
         }
 
         _dragging = true;
@@ -1505,6 +1525,10 @@ internal sealed class SelectionForm : Form
 
     protected override void OnMouseUp(MouseEventArgs e)
     {
+        if (_mode == "portal-strips" && (!_dragging || e.Button != MouseButtons.Left))
+        {
+            return;
+        }
         _dragging = false;
         _current = PointToScreen(e.Location);
         var rect = Normalized(_start, _current);
@@ -1513,7 +1537,7 @@ internal sealed class SelectionForm : Form
             Finish(cancelled: true);
             return;
         }
-
+        _dragging = false;
         if (_mode == "portal-strips")
         {
             if (_portalStripStep == 1)
