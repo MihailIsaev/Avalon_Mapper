@@ -4151,6 +4151,7 @@ fn handle_hotkey_capture(
     capture_helper: &Arc<Mutex<Option<CaptureHelperProcess>>>,
     kind: &str,
 ) -> Result<(), String> {
+    let total_started = Instant::now();
     eprintln!(
         "[capture-hotkey] {kind} capture requested from overlay hotkey pending={}",
         HotkeyCaptureGuard::pending_count()
@@ -4182,6 +4183,7 @@ fn handle_hotkey_capture(
     let started = Instant::now();
 
 let ocr_result = {
+    let total_started = Instant::now();
     let Some(_capture_guard) = HotkeyCaptureGuard::try_acquire() else {
         eprintln!(
             "[capture-hotkey] ignoring {kind} capture because capture queue is full ({MAX_HOTKEY_CAPTURE_QUEUE})"
