@@ -1676,6 +1676,9 @@ internal static class CaptureOcr
 
         var rectStarted = Stopwatch.StartNew();
         var rect = CaptureRect(args, width, height);
+        Console.Error.WriteLine(
+            $"[capture-helper] rect={rect.X},{rect.Y} {rect.Width}x{rect.Height}"
+        );
         Console.Error.WriteLine($"[capture-helper-timing] kind={kind} phase=rect ms={rectStarted.ElapsedMilliseconds} rect={rect.Left},{rect.Top},{rect.Width}x{rect.Height}");
         var dirStarted = Stopwatch.StartNew();
         Directory.CreateDirectory(outputDir);
