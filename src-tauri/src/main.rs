@@ -4362,6 +4362,18 @@ fn run_capture_ocr_with_helper(
     center_cursor: bool,
     portal_anchor: Option<(f64, f64)>,
 ) -> Result<CaptureOcrResult, String>  {
+    #[cfg(target_os = "windows")]
+    {
+        return run_capture_ocr_once(
+            helper_path,
+            capture_dir,
+            paddle_ocr,
+            kind,
+            region,
+            center_cursor,
+            portal_anchor,
+        );
+    }
     let result = run_capture_with_persistent_helper(
         capture_helper,
         helper_path,
