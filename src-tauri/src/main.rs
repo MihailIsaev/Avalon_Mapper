@@ -4351,7 +4351,6 @@ fn run_capture_with_persistent_helper(
     serde_json::from_str::<CaptureOcrResult>(&line)
         .map_err(|err| format!("Persistent capture helper returned invalid JSON: {err}; line={line}"))
 }
-
 fn run_capture_ocr_with_helper(
     capture_helper: &Arc<Mutex<Option<CaptureHelperProcess>>>,
     helper_path: &Path,
@@ -4361,44 +4360,143 @@ fn run_capture_ocr_with_helper(
     region: &Region,
     center_cursor: bool,
     portal_anchor: Option<(f64, f64)>,
-) -> Result<CaptureOcrResult, String>  {
-    #[cfg(target_os = "windows")]
+) -> Result<CaptureOcrResult, String> {
+    #[cfg(not(target_os = "windows"))]
     {
-        return run_capture_ocr_with_helper(
+        let result = run_capture_with_persistent_helper(
+            capture_helper,
             helper_path,
-            capture_dir,
-            paddle_ocr,
             kind,
             region,
             center_cursor,
             portal_anchor,
-        );
+            capture_dir,
+        )?;
+
+        let paddle_kind = if kind == "current_location" { "current" } else { kind };
+        let paddle = run_paddle_ocr(paddle_ocr, &result.image_path, paddle_kind)?;
+
+        return Ok(CaptureOcrResult {
+            text: paddle.text,
+            confidence: paddle.confidence,
+            engine: paddle.engine,
+            image_path: result.image_path,
+            width: result.width,
+            height: result.height,
+            duration_ms: result.duration_ms,
+            screen_recording_permission: result.screen_recording_permission,
+            lines: paddle.lines,
+        });
     }
-    let result = run_capture_with_persistent_helper(
-        capture_helper,
-        helper_path,
-        kind,
-        region,
-        center_cursor,
-        portal_anchor,
-        capture_dir,
-    )?;
 
-    let paddle_kind = if kind == "current_location" { "current" } else { kind };
+    #[cfg(target_os = "windows")]
+    {
+        let _ = capture_helper;
 
-    let paddle = run_paddle_ocr(paddle_ocr, &result.image_path, paddle_kind)?;
+        let total_started = Instant::now();
 
-    return Ok(CaptureOcrResult {
-        text: paddle.text,
-        confidence: paddle.confidence,
-        engine: paddle.engine,
-        image_path: result.image_path,
-        width: result.width,
-        height: result.height,
-        duration_ms: result.duration_ms,
-        screen_recording_permission: result.screen_recording_permission,
-        lines: paddle.lines,
-    });
+        let mut command = Command::new(helper_path);
+        command
+            .arg("--mode")
+            .arg("capture-ocr")
+            .arg("--kind")
+            .arg(kind)
+            .arg("--output-dir")
+            .arg(capture_dir)
+            .arg("--x")
+            .arg(region.x.to_string())
+            .arg("--y")
+            .arg(region.y.to_string())
+            .arg("--width")
+            .arg(region.width.to_string())
+            .arg("--height")
+            .arg(region.height.to_string());
+
+        if center_cursor {
+            command.arg("--center-cursor");
+        }
+
+        if let Some((anchor_x, anchor_y)) = portal_anchor {
+            command
+                .arg("--portal-anchor-x")
+                .arg(anchor_x.to_string())
+                .arg("--portal-anchor-y")
+                .arg(anchor_y.to_string())
+                .arg("--portal-x")
+                .arg(region.x.to_string())
+                .arg("--portal-y")
+                .arg(region.y.to_string())
+                .arg("--portal-width")
+                .arg(region.width.to_string())
+                .arg("--portal-height")
+                .arg(region.height.to_string());
+        }
+
+        if let Some(display_id) = &region.display_id {
+            command.arg("--display-id").arg(display_id);
+        }
+
+        eprintln!(
+            "[capture] running helper kind={kind} region={}x{} at {},{}",
+            region.width, region.height, region.x, region.y
+        );
+
+        let helper_started = Instant::now();
+        let output = command
+            .output()
+            .map_err(|err| format!("Could not run capture helper: {err}"))?;
+        let helper_ms = helper_started.elapsed().as_millis();
+
+        forward_child_stderr("capture-helper", &output.stderr);
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let json_line = stdout
+            .lines()
+            .last()
+            .ok_or_else(|| "Capture helper returned no data".to_string())?;
+
+        let result = serde_json::from_str::<CaptureOcrResult>(json_line)
+            .map_err(|err| format!("Capture helper returned invalid data: {err}"))?;
+
+        eprintln!(
+            "[capture-timing] kind={kind} phase=helper_process ms={helper_ms} helper_capture_ms={} image={} size={}x{}",
+            result.duration_ms, result.image_path, result.width, result.height
+        );
+
+        let paddle_kind = if kind == "current_location" { "current" } else { kind };
+
+        eprintln!(
+            "[capture] running ocr kind={paddle_kind} image={}",
+            result.image_path
+        );
+
+        let ocr_started = Instant::now();
+        let paddle = run_paddle_ocr(paddle_ocr, &result.image_path, paddle_kind)?;
+        let ocr_ms = ocr_started.elapsed().as_millis();
+
+        eprintln!(
+            "[capture-timing] kind={kind} phase=ocr_worker ms={ocr_ms} total_ms={} engine={} confidence={:?}",
+            total_started.elapsed().as_millis(),
+            paddle.engine,
+            paddle.confidence
+        );
+
+        Ok(CaptureOcrResult {
+            text: paddle.text,
+            confidence: paddle.confidence,
+            engine: paddle.engine,
+            image_path: result.image_path,
+            width: result.width,
+            height: result.height,
+            duration_ms: result.duration_ms,
+            screen_recording_permission: result.screen_recording_permission,
+            lines: paddle.lines,
+        })
+    }
 }
 
 fn run_paddle_ocr(
