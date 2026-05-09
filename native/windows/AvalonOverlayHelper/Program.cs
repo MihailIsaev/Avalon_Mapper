@@ -1715,15 +1715,24 @@ internal static class CaptureOcr
         var portalAnchorX = Args.DoubleValue(args, "--portal-anchor-x");
         var portalAnchorY = Args.DoubleValue(args, "--portal-anchor-y");
 
-        if (portalX != int.MinValue && portalY != int.MinValue && portalWidth > 0 && portalHeight > 0 && portalAnchorX.HasValue && portalAnchorY.HasValue)
+        if (portalX != int.MinValue
+            && portalY != int.MinValue
+            && portalWidth > 0
+            && portalHeight > 0
+            && portalAnchorX.HasValue
+            && portalAnchorY.HasValue)
         {
-            var selected = new Rectangle(portalX, portalY, portalWidth, portalHeight);
             var cursor = Cursor.Position;
-            var offsetX = selected.Left - (int)Math.Round(portalAnchorX.Value);
-            var offsetY = selected.Top - (int)Math.Round(portalAnchorY.Value);
-            var sameSide = new Rectangle(cursor.X + offsetX, cursor.Y + offsetY, selected.Width, selected.Height);
-            var mirrored = new Rectangle(cursor.X - (selected.Right - (int)Math.Round(portalAnchorX.Value)), cursor.Y + offsetY, selected.Width, selected.Height);
-            return Rectangle.Union(sameSide, mirrored);
+
+            var offsetX = portalX - (int)Math.Round(portalAnchorX.Value);
+            var offsetY = portalY - (int)Math.Round(portalAnchorY.Value);
+
+            return new Rectangle(
+                cursor.X + offsetX,
+                cursor.Y + offsetY,
+                portalWidth,
+                portalHeight
+            );
         }
 
         if (args.Contains("--center-cursor"))
