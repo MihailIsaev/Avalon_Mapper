@@ -63,13 +63,20 @@ def initialize_ocr():
     )
     if sys.platform == "win32":
         print(
-            "[ocr] windows detected; using RapidOCR ONNXRuntime",
+            "[ocr] windows detected; trying PaddleOCR first",
             file=sys.stderr,
             flush=True,
         )
-        attempts = [rapidocr_attempt]
+        attempts = [
+            named_paddle_attempt,
+            default_paddle_attempt,
+            rapidocr_attempt,
+        ]
     else:
-        attempts = [named_paddle_attempt, default_paddle_attempt]
+        attempts = [
+            named_paddle_attempt,
+            default_paddle_attempt,
+        ]
 
     errors = []
     for name, factory, model_summary in attempts:
