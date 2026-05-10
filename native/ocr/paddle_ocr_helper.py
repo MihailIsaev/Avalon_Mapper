@@ -292,21 +292,70 @@ def run_engine(image_path: str) -> list[dict]:
             lines.append(line)
         return lines
 
-    result = engine.predict(image_path)
     lines = []
 
-    for page in result:
-        texts = page.get("rec_texts", [])
-        scores = page.get("rec_scores", [])
+    if hasattr(engine, "predict"):
+        result = engine.predict(image_path)
 
-        for text, score in zip(texts, scores):
-            text = (text or "").strip()
+        for page in result:
+            texts = page.get("rec_texts", [])
+            scores = page.get("rec_scores", [])
+            boxes = page.get("rec_boxes", []) or page.get("dt_polys", [])
+
+            for index, (text, score) in enumerate(zip(texts, scores)):
+                text = (text or "").strip()
+                if not text:
+                    continue
+
+                line = {
+                    "text": text,
+                    "confidence": float(score) if score is not None else None,
+                }
+
+                if index < len(boxes):
+                    bbox = bbox_from_rapidocr_box(boxes[index])
+                    if bbox is not None:
+                        line["bbox"] = bbox
+
+                lines.append(line)
+
+        return lines
+
+    result = engine.ocr(image_path, cls=False)
+
+    if not result:
+        return lines
+
+    for page in result:
+        if not page:
+            continue
+
+        for item in page:
+            if len(item) < 2:
+                continue
+
+            box = item[0]
+            rec = item[1]
+
+            if not rec or len(rec) < 2:
+                continue
+
+            text = (rec[0] or "").strip()
+            score = rec[1]
+
             if not text:
                 continue
-            lines.append({
+
+            line = {
                 "text": text,
-                "confidence": float(score) if score is not None else None
-            })
+                "confidence": float(score) if score is not None else None,
+            }
+
+            bbox = bbox_from_rapidocr_box(box)
+            if bbox is not None:
+                line["bbox"] = bbox
+
+            lines.append(line)
 
     return lines
 
