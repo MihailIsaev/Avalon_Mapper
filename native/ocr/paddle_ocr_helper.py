@@ -48,13 +48,11 @@ def create_paddleocr(kwargs):
 
         if os.path.exists(det_ascii):
             kwargs.setdefault("det_model_dir", det_ascii)
-
         if os.path.exists(rec_ascii):
             kwargs.setdefault("rec_model_dir", rec_ascii)
-
         if os.path.exists(cls_ascii):
             kwargs.setdefault("cls_model_dir", cls_ascii)
-
+    kwargs.setdefault("show_log", False)
     return PaddleOCR(**kwargs)
 
 def initialize_ocr():
