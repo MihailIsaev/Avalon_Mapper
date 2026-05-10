@@ -201,7 +201,6 @@ final class SelectionOverlayController: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        NSApp.activate(ignoringOtherApps: true)
 
         let screens = NSScreen.screens
         if screens.isEmpty {
@@ -221,7 +220,7 @@ final class SelectionOverlayController: NSObject, NSApplicationDelegate {
             panel.isOpaque = false
             panel.backgroundColor = .clear
             panel.hasShadow = false
-            panel.level = .screenSaver
+            panel.level = .screenSaver + 1
             panel.ignoresMouseEvents = false
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
 
@@ -545,6 +544,7 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
     private var overlayView: MapOverlayView?
     private var boundsStatePath: String?
     private var hotKeyRefs: [EventHotKeyRef?] = [nil, nil, nil]
+    private var hotKeyHandlerRef: EventHandlerRef?
     private var hotkeyToggle = HotkeyBinding(key_code: UInt32(kVK_ANSI_M), modifiers: UInt32(optionKey | shiftKey), label: "⌥⇧M")
     private var hotkeyCurrent = HotkeyBinding(key_code: UInt32(kVK_ANSI_L), modifiers: UInt32(optionKey | shiftKey), label: "⌥⇧L")
     private var hotkeyPortal = HotkeyBinding(key_code: UInt32(kVK_ANSI_P), modifiers: UInt32(optionKey | shiftKey), label: "⌥⇧P")
@@ -650,7 +650,7 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.level = .screenSaver
+        panel.level = .screenSaver + 1
         panel.ignoresMouseEvents = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
 
@@ -684,20 +684,34 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
 
     private func registerHotKey() {
         unregisterHotKeys()
+        installHotKeyHandlerIfNeeded()
 
         registerHotKey(id: 1, keyCode: hotkeyToggle.key_code, modifiers: hotkeyToggle.modifiers, index: 0)
         registerHotKey(id: 2, keyCode: hotkeyCurrent.key_code, modifiers: hotkeyCurrent.modifiers, index: 1)
         registerHotKey(id: 3, keyCode: hotkeyPortal.key_code, modifiers: hotkeyPortal.modifiers, index: 2)
+    }
 
-        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(
+    private func installHotKeyHandlerIfNeeded() {
+        guard hotKeyHandlerRef == nil else { return }
+
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+
+        let status = InstallEventHandler(
             GetApplicationEventTarget(),
             mapOverlayHotKeyHandler,
             1,
             &eventType,
             Unmanaged.passUnretained(self).toOpaque(),
-            nil
+            &hotKeyHandlerRef
         )
+
+        if status != noErr {
+            fputs("[overlay-hotkey] InstallEventHandler failed status=\(status)\n", stderr)
+            fflush(stderr)
+        }
     }
 
     private func unregisterHotKeys() {
@@ -773,7 +787,29 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
     private func show() {
         guard let panel else { return }
         visible = true
+
+        panel.ignoresMouseEvents = true
+        panel.collectionBehavior = [
+            .canJoinAllSpaces,
+            .fullScreenAuxiliary,
+            .stationary,
+            .ignoresCycle,
+            .transient
+        ]
+
+        // Короткий aggressive raise, чтобы пробить fullscreen Albion
+        panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
         panel.orderFrontRegardless()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) { [weak self] in
+            guard let panel = self?.panel, self?.visible == true else { return }
+
+            // Возвращаем безопасный уровень, чтобы не ломать ввод другим приложениям
+            panel.level = .screenSaver + 1
+            panel.ignoresMouseEvents = true
+            panel.orderFrontRegardless()
+        }
+
         print("{\"event\":\"visible\",\"visible\":true}")
         fflush(stdout)
     }
@@ -2332,14 +2368,14 @@ func mapOverlayHotKeyHandler(
     if status == noErr && hotKeyID.signature == OSType(0x414D4F4D) {
         let controller = Unmanaged<MapOverlayController>.fromOpaque(userData).takeUnretainedValue()
         switch hotKeyID.id {
-        case 1:
-            controller.toggleFromHotkey()
-        case 2:
-            controller.captureCurrentFromHotkey()
-        case 3:
-            controller.capturePortalFromHotkey()
-        default:
-            break
+            case 1:
+                controller.toggleFromHotkey()
+            case 2:
+                controller.captureCurrentFromHotkey()
+            case 3:
+                controller.capturePortalFromHotkey()
+            default:
+                break
         }
     }
     return noErr

@@ -1352,8 +1352,8 @@ fn open_database(path: &Path) -> rusqlite::Result<Connection> {
 }
 
 fn configure_database_connection(conn: &Connection) -> rusqlite::Result<()> {
-    conn.busy_timeout(StdDuration::from_secs(5))?;
-    conn.pragma_update(None, "busy_timeout", 5000)?;
+    conn.busy_timeout(StdDuration::from_secs(20))?;
+    conn.pragma_update(None, "busy_timeout", 20000)?;
     Ok(())
 }
 
