@@ -24,9 +24,36 @@ def create_paddleocr(kwargs):
     from paddleocr import PaddleOCR
 
     if sys.platform == "win32":
-        kwargs.setdefault("det_model_dir", r"C:\paddle_models\whl\det\en\en_PP-OCRv3_det_infer")
-        kwargs.setdefault("rec_model_dir", r"C:\paddle_models\whl\rec\en\en_PP-OCRv4_rec_infer")
-        kwargs.setdefault("cls_model_dir", r"C:\paddle_models\whl\cls\ch_ppocr_mobile_v2.0_cls_infer")
+        ascii_root = r"C:\paddle_models\whl"
+
+        det_ascii = os.path.join(
+            ascii_root,
+            "det",
+            "en",
+            "en_PP-OCRv3_det_infer",
+        )
+
+        rec_ascii = os.path.join(
+            ascii_root,
+            "rec",
+            "en",
+            "en_PP-OCRv4_rec_infer",
+        )
+
+        cls_ascii = os.path.join(
+            ascii_root,
+            "cls",
+            "ch_ppocr_mobile_v2.0_cls_infer",
+        )
+
+        if os.path.exists(det_ascii):
+            kwargs.setdefault("det_model_dir", det_ascii)
+
+        if os.path.exists(rec_ascii):
+            kwargs.setdefault("rec_model_dir", rec_ascii)
+
+        if os.path.exists(cls_ascii):
+            kwargs.setdefault("cls_model_dir", cls_ascii)
 
     return PaddleOCR(**kwargs)
 
