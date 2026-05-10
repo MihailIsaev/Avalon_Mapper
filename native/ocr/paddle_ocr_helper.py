@@ -23,6 +23,11 @@ engine_name = "ocr:auto"
 def create_paddleocr(kwargs):
     from paddleocr import PaddleOCR
 
+    if sys.platform == "win32":
+        kwargs.setdefault("det_model_dir", r"C:\paddle_models\whl\det\en\en_PP-OCRv3_det_infer")
+        kwargs.setdefault("rec_model_dir", r"C:\paddle_models\whl\rec\en\en_PP-OCRv4_rec_infer")
+        kwargs.setdefault("cls_model_dir", r"C:\paddle_models\whl\cls\ch_ppocr_mobile_v2.0_cls_infer")
+
     return PaddleOCR(**kwargs)
 
 def initialize_ocr():
