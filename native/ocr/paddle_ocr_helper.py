@@ -18,10 +18,7 @@ DETECTION_MODEL_NAME = "PP-OCRv5_mobile_det"
 ocr = None
 engine_name = "ocr:auto"
 
-def create_rapidocr():
-    from rapidocr_onnxruntime import RapidOCR
 
-    return RapidOCR()
 
 def create_paddleocr(kwargs):
     from paddleocr import PaddleOCR
@@ -32,11 +29,7 @@ def initialize_ocr():
     global engine_name
 
     source = os.environ.get("PADDLE_PDX_MODEL_SOURCE")
-    rapidocr_attempt = (
-        "rapidocr:onnxruntime",
-        lambda: create_rapidocr(),
-        "onnxruntime",
-    )
+
     default_paddle_attempt = (
         "paddleocr:en_default",
         lambda: create_paddleocr({
@@ -70,7 +63,6 @@ def initialize_ocr():
         attempts = [
             named_paddle_attempt,
             default_paddle_attempt,
-            rapidocr_attempt,
         ]
     else:
         attempts = [
