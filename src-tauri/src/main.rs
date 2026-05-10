@@ -4685,7 +4685,7 @@ fn ensure_paddle_ocr_process(
         }
     });
 
-    match ready_rx.recv_timeout(StdDuration::from_secs(60)) {
+    match ready_rx.recv_timeout(StdDuration::from_secs(600)) {
         Ok(Ok(())) => {}
         Ok(Err(err)) => {
             let status = child.try_wait().ok().flatten();
