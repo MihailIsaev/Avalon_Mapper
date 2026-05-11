@@ -211,7 +211,7 @@ final class SelectionOverlayController: NSObject, NSApplicationDelegate {
         for screen in screens {
             let panel = SelectionPanel(
                 contentRect: screen.frame,
-                styleMask: [.borderless, .nonactivatingPanel],
+                styleMask: [.borderless],
                 backing: .buffered,
                 defer: false,
                 screen: screen
@@ -220,10 +220,15 @@ final class SelectionOverlayController: NSObject, NSApplicationDelegate {
             panel.isOpaque = false
             panel.backgroundColor = .clear
             panel.hasShadow = false
-            panel.level = .screenSaver + 1
-            panel.ignoresMouseEvents = false
-            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-
+            panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
+            panel.ignoresMouseEvents = true
+            panel.collectionBehavior = [
+                .canJoinAllSpaces,
+                .fullScreenAuxiliary,
+                .stationary,
+                .ignoresCycle,
+                .transient
+            ]
             let view = SelectionOverlayView(frame: NSRect(origin: .zero, size: screen.frame.size), screen: screen, mode: mode)
             view.onComplete = { [weak self] result in self?.printAndQuit(result) }
             view.onCancel = { [weak self] in self?.finish(cancelled: true) }
@@ -554,6 +559,7 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
     private var resizeStartFrame: NSRect?
     private var visible = false
     private var interactive = false
+
     private var overlayData = MapOverlayData(
         route_expires_at: nil,
         route_edges_count: 0,
@@ -650,10 +656,16 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.level = .screenSaver + 1
-        panel.ignoresMouseEvents = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-
+        panel.hidesOnDeactivate = false
+        panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
+        panel.ignoresMouseEvents = !interactive
+        panel.collectionBehavior = [
+            .canJoinAllSpaces,
+            .fullScreenAuxiliary,
+            .stationary,
+            .ignoresCycle,
+            .transient
+        ]
         let view = MapOverlayView(frame: NSRect(origin: .zero, size: frame.size))
         view.data = overlayData
         view.onMoveStart = { [weak self] point in self?.beginMove(at: point) }
@@ -676,7 +688,8 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
         }
 
         panel.contentView = view
-
+        panel.alphaValue = 0.01
+        panel.orderFrontRegardless()
         self.panel = panel
         self.overlayView = view
         setInteractive(false)
@@ -788,7 +801,8 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
         guard let panel else { return }
         visible = true
 
-        panel.ignoresMouseEvents = true
+        panel.hidesOnDeactivate = false
+        panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
         panel.collectionBehavior = [
             .canJoinAllSpaces,
             .fullScreenAuxiliary,
@@ -797,52 +811,60 @@ final class MapOverlayController: NSObject, NSApplicationDelegate {
             .transient
         ]
 
-        // Короткий aggressive raise, чтобы пробить fullscreen Albion
-        panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
+        panel.ignoresMouseEvents = !interactive
+        overlayView?.interactive = interactive
+        overlayView?.needsDisplay = true
+
+        panel.alphaValue = 1.0
         panel.orderFrontRegardless()
+        panel.contentView?.needsDisplay = true
+        panel.display()
+        panel.displayIfNeeded()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) { [weak self] in
-            guard let panel = self?.panel, self?.visible == true else { return }
-
-            // Возвращаем безопасный уровень, чтобы не ломать ввод другим приложениям
-            panel.level = .screenSaver + 1
-            panel.ignoresMouseEvents = true
-            panel.orderFrontRegardless()
+        if interactive {
+            panel.makeKeyAndOrderFront(nil)
+            panel.makeFirstResponder(overlayView)
         }
 
         print("{\"event\":\"visible\",\"visible\":true}")
         fflush(stdout)
     }
-
     private func hide() {
         visible = false
-        panel?.orderOut(nil)
+
+        // НЕ 0.0 — иначе fullscreen compositor иногда перестаёт обновлять окно
+        panel?.alphaValue = 0.01
+        panel?.ignoresMouseEvents = true
+        overlayView?.interactive = false
+        overlayView?.needsDisplay = true
+
         print("{\"event\":\"visible\",\"visible\":false}")
         fflush(stdout)
     }
-
     private func toggle() {
         visible ? hide() : show()
     }
 
     private func setInteractive(_ enabled: Bool) {
         interactive = enabled
+
+        panel?.hidesOnDeactivate = false
         panel?.ignoresMouseEvents = !enabled
         overlayView?.interactive = enabled
+
         if !enabled {
             overlayView?.deleteEdgeMode = false
         }
+
         overlayView?.needsDisplay = true
 
-        if enabled {
-            panel?.makeKeyAndOrderFront(nil)
-            panel?.makeFirstResponder(overlayView)
+        if visible {
+            show()
         }
 
         print("{\"event\":\"interactive\",\"enabled\":\(enabled ? "true" : "false")}")
         fflush(stdout)
     }
-
     private func setBounds(_ bounds: MapOverlayBounds) {
         panel?.setFrame(frameFromTopLeftBounds(sanitize(bounds)), display: true)
         persistCurrentBounds()
